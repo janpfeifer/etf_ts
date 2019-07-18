@@ -35,6 +35,9 @@ flags.DEFINE_string(
 flags.DEFINE_list(
     'symbols', None,
     'List of sBase path where to store historical marked data. Can be shared across models')
+flags.DEFINE_bool(
+    'force_recalc', False,
+    'If true forces recalculation of derived values.')
 
 flags.mark_flag_as_required('data')
 
@@ -53,7 +56,8 @@ def main(argv):
     # Calculate independent (from each other) derived information if not loaded from cache.
     for symbol in symbols:
         df = dmgr.data[symbol]
-        if not asset_measures.HasDerivedValues(df):
+        if not asset_measures.HasDerivedValues(df) or FLAGS.force_recalc:
+            logging.info(f'Calculating derived values for {symbol}')
             asset_measures.AddDerivedValues(df)
             dmgr.SaveData(symbol)
 

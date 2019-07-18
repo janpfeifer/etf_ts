@@ -5,6 +5,8 @@
 # Some are expensive to calculate and they can be cached by the data_manager,
 # along with the downloaded original data.
 
+from absl import logging
+
 import math
 import numpy as np
 import pandas as pd
@@ -33,7 +35,6 @@ def StringDateToSerial(date_str: str) -> int:
 
 def AddDerivedValues(df: pd.DataFrame) -> None:
     """Add some standard derived values to dataframe."""
-    logging.info(f'Calculating derived values for {symbol}')
     df['Serial'] = df['Date'].apply(StringDateToSerial)
     df['MidOpenClose'] = (df['Open'] + df['Close']) / 2.0
     df['MidHighLow'] = (df['High'] + df['Low']) / 2.0
@@ -44,9 +45,20 @@ def AddDerivedValues(df: pd.DataFrame) -> None:
     df['DailyGainPct'] = 100.0 * df['DailyGain'] / df['Close']
     df['DeltaSerial'] = df['Serial'] - df['Serial'].shift(+1)
 
+    MeanValue(df, 'Volume')
+
     # Add volatility metrics.
-    PctVolatility(df, "Close")
-    Volatility(df, "DailyGainPct")
+    PctVolatility(df, 'Close')
+    Volatility(df, 'DailyGainPct')
+
+
+def MeanValue(df: pd.DataFrame, field: str, window_size: int = MAX_WINDOW_SIZE):
+    values = df[field]
+    means = np.zeros_like(values)
+    for idx in range(values.size):
+        idx_start = max(0, idx - window_size + 1)
+        means[idx] = np.mean(values[idx_start:idx + 1])
+    df[f'{field}Mean'] = means
 
 
 def VolatilitySubRange(values: np.array, weights: np.array) -> Tuple[float, float]:
