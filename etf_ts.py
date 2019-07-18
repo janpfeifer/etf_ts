@@ -1,9 +1,21 @@
 #!/usr/bin/env python
 
-# etf_tf.py will train a model or using a trained model output a prediction
-# of best mixture of ETFs to maximize gains, minimize volatility and risk,
-# according to parameters in config.py.
-
+# etf_ts.py will download and generate some basic statistics about given list o
+# assets (the idea is to focus on ETFs).
+#
+# It downloads the info from WorldTradingData.com (it seems a great service!),
+# and caches it locally to disk. If data is > 10 days old, it will reload.
+#
+# It requires one to create an account in WorldTradingData.com and pasting
+# your key to .../data/WTD_API_KEY.txt.
+#
+# Example of how to run it:
+#
+#     $ ./etf_ts.py --data $(pwd)/data
+#
+# Eventually it will train a model to optimze a balanced investment ... when
+# free time allows.
+#
 # import tensorflow as tf
 # from tensorflow import keras
 
