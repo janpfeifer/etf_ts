@@ -1,0 +1,8 @@
+* Calculate and plot volume
+* Define loss function, and "adjusted gain" (for factors like volatility)
+* Calculate largest gain (per day granularity) and largest "adjusted gain". Histogram per year of gains, number of ETFs used and rate of change of ETF for those.
+* Calculate best (largest "adjusted gain") fixed mix of ETF for given period (month, year).
+   * Calculate "adjusted gain" for next month/year, if using best mix of the previous year/month.
+
+...
+* Predict best mix for next month/year.
