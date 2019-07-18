@@ -2,3 +2,6 @@ Pipfile*
 venv/
 etf_tf.sublime*
 data/
+.mypy_cache/
+__pycache__/
+
