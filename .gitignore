@@ -1,0 +1,4 @@
+Pipfile*
+venv/
+etf_tf.sublime*
+data/
