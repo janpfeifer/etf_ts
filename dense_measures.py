@@ -28,7 +28,7 @@ _MAX_SERIAL = sys.maxsize
 
 
 def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[Text]
-                         ) -> Tuple[Dict[Text, np.ndarray], np.ndarray]:
+                         ) -> Tuple[Dict[Text, np.ndarray], np.ndarray, List[int]]:
     """Returns a mapping of field name to associated data, and a bool mask of values present.
 
     Args:
