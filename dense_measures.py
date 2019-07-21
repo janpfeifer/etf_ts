@@ -85,7 +85,7 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
             for field in config.FIELDS_FOR_TENSORFLOW:
                 field_to_ndarray[field][serial_idx,
                                         symbol_idx] = df[field][current_indices[symbol_idx]]
-    return field_to_ndarray, mask
+    return field_to_ndarray, mask, all_serials
 
 
 def _FindActive(dmgr: data_manager.DataManager, ordered_symbols: List[Text],

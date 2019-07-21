@@ -91,8 +91,8 @@ FIELDS_FOR_TENSORFLOW = [
 # A month is roughly equivalent to 17 "days"
 MONTHLY_PERIOD_IN_SERIAL = 17
 
-# A year is roughly wequivalent to 200 "days" (serial counts)
-YEARLY_PERIOD_IN_SERIAL = 200
+# A year is roughly wequivalent to 240 "days" (serial counts)
+YEARLY_PERIOD_IN_SERIAL = 257
 
 # Symbols not available in WorldTradeData:
 # 'ESGV', 'VLFQ', 'VFMF', 'VSGX', 'VFQY', 'VFMO',
