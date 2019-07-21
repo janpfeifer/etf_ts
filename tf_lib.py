@@ -5,17 +5,30 @@ import tensorflow as tf
 
 
 MIN_POSSIBLE_VALUE = np.finfo(np.float32).min
+MAX_POSSIBLE_VALUE = np.finfo(np.float32).max
 
 
-def masked_reduce_max(t: tf.Tensor, mask: tf.Tensor, axis=None,
-                      keepdims=None, name=None) -> tf.Tensor:
+def masked_reduce_max(t: tf.Tensor, mask: tf.Tensor, default: float,
+                      axis=None, keepdims=None, name=None) -> tf.Tensor:
     with tf.name_scope(name=name or 'masked_reduce_max'):
         min_mask = tf.where(mask, t, tf.ones_like(t) * MIN_POSSIBLE_VALUE)
-        return tf.math.reduce_max(min_mask, axis=axis, keepdims=keepdims)
+        reduced = tf.math.reduce_max(min_mask, axis=axis, keepdims=keepdims)
+        reduced_mask = tf.reduce_any(mask, axis=axis, keepdims=keepdims)
+        return tf.where(reduced_mask, reduce, tf.ones_like(t) * default)
+
+
+def masked_reduce_min(t: tf.Tensor, mask: tf.Tensor, default: float,
+                      axis=None, keepdims=None, name=None) -> tf.Tensor:
+    """Like tf.reduce_min, but numbers where mask=False don't participate. Completely masked values are replaced by default."""
+    with tf.name_scope(name=name or 'masked_reduce_max'):
+        max_mask = tf.where(mask, t, tf.ones_like(t) * MAX_POSSIBLE_VALUE)
+        reduced = tf.math.reduce_max(min_mask, axis=axis, keepdims=keepdims)
+        reduced_mask = tf.reduce_any(mask, axis=axis, keepdims=keepdims)
+        return tf.where(reduced_mask, reduce, tf.ones_like(t) * default)
 
 
 def masked_softmax(logits: tf.Tensor, mask: tf.Tensor) -> tf.Tensor:
-    logits_max = masked_reduce_max(logits, mask, axis=-1, keepdims=1)
+    logits_max = masked_reduce_max(logits, mask, 0., axis=-1, keepdims=1)
     logtis_max = tf.stop_gradient(logits_max)
     normalized_logits = logits - logits_max
     zeros = tf.zeros_like(logits)

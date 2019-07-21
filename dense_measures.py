@@ -2,6 +2,7 @@
 # days considered, with zeroes for assets not available, and a final
 # mask of which asset is available in each day.
 
+from absl import flags
 from absl import logging
 
 import math
@@ -16,6 +17,11 @@ from typing import Dict, List, Set, Text, Tuple
 import asset_measures
 import config
 import data_manager
+
+FLAGS = flags.FLAGS
+flags.DEFINE_integer(
+    'max_days', None,
+    'If set, take only the latest fiven number of days.')
 
 
 _MAX_SERIAL = sys.maxsize
@@ -54,6 +60,8 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
             serials_set = serials_set.union(serials)
     all_serials = sorted(
         filter(lambda x: x >= first_serial, list(serials_set)))
+    if FLAGS.max_days is not None:
+        all_serials = all_serials[-FLAGS.max_days:]
 
     # Initalizes matrices with zeros.
     rows = len(all_serials)
