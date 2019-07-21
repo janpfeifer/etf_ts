@@ -14,7 +14,7 @@ def masked_reduce_max(t: tf.Tensor, mask: tf.Tensor, default: float,
         min_mask = tf.where(mask, t, tf.ones_like(t) * MIN_POSSIBLE_VALUE)
         reduced = tf.math.reduce_max(min_mask, axis=axis, keepdims=keepdims)
         reduced_mask = tf.reduce_any(mask, axis=axis, keepdims=keepdims)
-        return tf.where(reduced_mask, reduce, tf.ones_like(t) * default)
+        return tf.where(reduced_mask, reduced, tf.ones_like(t) * default)
 
 
 def masked_reduce_min(t: tf.Tensor, mask: tf.Tensor, default: float,
@@ -22,9 +22,9 @@ def masked_reduce_min(t: tf.Tensor, mask: tf.Tensor, default: float,
     """Like tf.reduce_min, but numbers where mask=False don't participate. Completely masked values are replaced by default."""
     with tf.name_scope(name=name or 'masked_reduce_max'):
         max_mask = tf.where(mask, t, tf.ones_like(t) * MAX_POSSIBLE_VALUE)
-        reduced = tf.math.reduce_max(min_mask, axis=axis, keepdims=keepdims)
+        reduced = tf.math.reduce_max(max_mask, axis=axis, keepdims=keepdims)
         reduced_mask = tf.reduce_any(mask, axis=axis, keepdims=keepdims)
-        return tf.where(reduced_mask, reduce, tf.ones_like(t) * default)
+        return tf.where(reduced_mask, reduced, tf.ones_like(t) * default)
 
 
 def masked_softmax(logits: tf.Tensor, mask: tf.Tensor) -> tf.Tensor:
@@ -66,3 +66,53 @@ def masked_last(values: tf.Tensor, mask: tf.Tensor) -> tf.Tensor:
     indices = tf.where(mask, indices, -1 * tf.ones_like(indices))
     indices = tf.reduce_max(indices, axis=-1, keepdims=True)
     return tf.gather_nd(values, indices, batch_dims=len(indices.shape) - 1)
+
+
+def partial_matrix_reduce_sum(values: tf.Tensor, count: int) -> tf.Tensor:
+    """Reduce sum the last dimension in count elements at a time."""
+    if len(values.shape) != 2:
+        raise ValueError(
+            'partial_matrix_reduce_sum only takes tensors for rank=2, got rank {}'.format(len(values.shape)))
+    if count == 1:
+        return values
+    values = _reshape_for_partial_reduction(values, count)
+    return tf.reduce_sum(values, axis=-1)
+
+
+def partial_matrix_reduce_any(mask: tf.Tensor, count: int) -> tf.Tensor:
+    """Reduce the last dimension of a mask in count elements at a time."""
+    if len(mask.shape) != 2:
+        raise ValueError(
+            'partial_matrix_reduce_sum only takes tensors for rank=2, got rank {}'.format(len(mask.shape)))
+    if count == 1:
+        return mask
+    mask = _reshape_for_partial_reduction(mask, count)
+    return tf.reduce_any(mask, axis=-1)
+
+
+def _reshape_for_partial_reduction(values: tf.Tensor, count: int) -> tf.Tensor:
+    if len(values.shape) != 2:
+        raise ValueError(
+            '_reshape_for_partial_reduction only takes tensors for rank=2, got rank {}'.format(len(values.shape)))
+    mod_count = values.shape[1] % count
+    num_blocks = values.shape[1] // count
+    if mod_count != 0:
+        values = values[:, 0:num_blocks * count]
+    return tf.reshape(values, [values.shape[0], num_blocks, count])
+
+
+def masked_reduce_mean(t: tf.Tensor, mask: tf.Tensor, default: float,
+                       axis=None, keepdims=None, name=None) -> tf.Tensor:
+    with tf.name_scope(name=name or 'masked_reduce_mean'):
+        ones = tf.ones_like(t)
+        zeros = tf.zeros_like(t)
+        masked_t = tf.where(mask, t, zeros)
+        reduced_sum = tf.math.reduce_sum(
+            masked_t, axis=axis, keepdims=keepdims)
+        reduced_count = tf.math.reduce_sum(
+            tf.where(mask, ones, zeros), axis=axis, keepdims=keepdims)
+        reduced_count = tf.maximum(reduced_count, tf.ones_like(reduced_count))
+        mean = reduced_sum / reduced_count
+        mask_any = tf.reduce_any(mask, axis=axis, keepdims=keepdims)
+        mean = tf.where(mask_any, mean, default * tf.ones_like(mean))
+        return mean

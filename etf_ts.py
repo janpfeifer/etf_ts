@@ -48,7 +48,7 @@ flags.DEFINE_float(
     'loss_cost', 1.1,
     'Relative cost of losses compared to gain: the larger this number the larger the penalty for volatility.')
 flags.DEFINE_list(
-    'stats', 'per_asset,daily_oracle',
+    'stats', 'per_asset,greedy,average',
     'List of stats to output. A selection of: per_asset, etc.'
 )
 flags.mark_flag_as_required('data')
@@ -89,12 +89,16 @@ def main(argv):
             tf.constant(fields[field], dtype=tf.float32))
 
     # Extra metrics calculated in Tensorflow
-    fields['LogAdjustedGains'] = optimizations.adjust_log_daily_gain(
+    fields['LogAdjustedGains'] = optimizations.adjust_log_gain(
         fields['LogDailyGain'], FLAGS.loss_cost)
 
     # Print out gains for each symbol.
-    if 'daily_oracle' in FLAGS.stats:
-        daily_oracle(symbols, mask, fields)
+    # Header of all outputs.
+    print('Symbol,Gain,Adjusted Gain,Initial,Final,Description')
+    if 'average' in FLAGS.stats:
+        average(symbols, mask, fields)
+    if 'greedy' in FLAGS.stats:
+        greedy(symbols, mask, fields)
     if 'per_asset' in FLAGS.stats:
         per_asset_gains(symbols, mask, fields)
 
@@ -111,7 +115,6 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
     total_adjusted_gains = optimizations.total_gain_from_log_gains(
         log_adjusted_gains)
 
-    print('symbol,gain,adjusted,initial,final')
     for symbol_idx, symbol in enumerate(symbols):
         gain = total_gains[symbol_idx]
         adjusted_gain = total_adjusted_gains[symbol_idx]
@@ -120,20 +123,35 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
         print(f'{symbol},{gain:.4f},{adjusted_gain:.4f},{initial_value:.2f},{final_value:.2f}')
 
 
-def daily_oracle(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
+def greedy(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
     """Print total gain for best possible selection (oracle) per day."""
     log_gains = fields['LogDailyGain']
     log_adjusted_gains = fields['LogAdjustedGains']
-    best_gains = tf.reduce_max(log_gains, axis=0)
-    print(log_gains)
-    print(best_gains)
-    best_adjusted_gains = tf.reduce_max(
-        log_adjusted_gains, axis=0)
-    total_best = optimizations.total_gain_from_log_gains(best_gains)
-    print(total_best)
-    total_adjusted_best = optimizations.total_gain_from_log_gains(
-        best_adjusted_gains)
-    print(f'_Daily Oracle,{total_best:.4f},{total_adjusted_best:.4f}')
+
+    period_desc = ['Daily', 'Monthly', 'Yearly']
+    argmax_desc = ['Gain', 'Adjusted Gain']
+    for period_idx, period in enumerate([1, config.MONTHLY_PERIOD_IN_SERIAL, config.YEARLY_PERIOD_IN_SERIAL]):
+        for argmax_idx, argmax in enumerate([log_gains, log_adjusted_gains]):
+
+            chosen_gains, chosen_adjusted_gains = optimizations.greedy_selection_for_period(
+                argmax, [log_gains, log_adjusted_gains], mask, period)
+            total = optimizations.total_gain_from_log_gains(chosen_gains)
+            total_adjusted = optimizations.total_gain_from_log_gains(
+                chosen_adjusted_gains)
+            print(f'_Greedy {period_desc[period_idx]} {argmax_desc[argmax_idx]},{total:.4f},{total_adjusted:.4f},,,' +
+                  f'Selecting asset with best {argmax_desc[argmax_idx]} yield of last {period_desc[period_idx]} period')
+
+
+def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
+    log_gains = fields['LogDailyGain']
+    chosen_gains = tf.transpose(tf_lib.masked_reduce_mean(
+        tf.transpose(log_gains), tf.transpose(mask), 0.0, axis=-1))
+    chosen_adjusted_gains = optimizations.adjust_log_gain(
+        chosen_gains, FLAGS.loss_cost)
+    total = optimizations.total_gain_from_log_gains(chosen_gains)
+    total_adjusted = optimizations.total_gain_from_log_gains(
+        chosen_adjusted_gains)
+    print(f'_Average,{total:.4f},{total_adjusted:.4f},,,Average gains of all assets tracked.')
 
 
 if __name__ == '__main__':
