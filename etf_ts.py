@@ -70,10 +70,10 @@ def main(argv):
 
     # Calculate independent (from each other) derived information if not loaded from cache.
     for symbol in symbols:
-        df = dmgr.data[symbol]
-        if not asset_measures.HasDerivedValues(df) or FLAGS.force_recalc:
+        if not asset_measures.HasDerivedValues(dmgr.data[symbol]) or FLAGS.force_recalc:
             logging.info(f'Calculating derived values for {symbol}')
-            asset_measures.AddDerivedValues(df)
+            dmgr.data[symbol] = asset_measures.AddDerivedValues(
+                dmgr.data[symbol], symbol)
             dmgr.SaveData(symbol)
 
     # Calculate dense ordered arrays.

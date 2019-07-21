@@ -54,8 +54,16 @@ TICKERS = [
 
 ]
 
+# Trim data for some assets that have broken data. For each symbo defines the
+# minimum start date to consider.
+FIX_MIN_DATE = {
+    'VIG': '2006-01-01',
+    'VOT': '2006-08-25',
+}
+
 # Only consider information after this date: before this most ETFs didn't exist.
 START_DATE = '2004-01-01'
+
 
 # Ordered list of fields we are importing to TensorFlow for optimization.
 FIELDS_FOR_TENSORFLOW = [

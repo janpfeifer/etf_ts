@@ -12,8 +12,9 @@ import numpy as np
 import pandas as pd
 import datetime
 import time
-
 from typing import Tuple
+
+import config
 
 # Defines the largest window needed for derived data: we can use these first
 # elements of the input, since the derived data will not yet be available.
@@ -33,9 +34,26 @@ def StringDateToSerial(date_str: str) -> int:
     return int(round(time.mktime(time_parts) / (24 * 3600)))
 
 
-def AddDerivedValues(df: pd.DataFrame) -> None:
+def _trim_before_serial(df: pd.DataFrame, min_serial: int) -> pd.DataFrame:
+    """Remove all entries that preceed serial value."""
+    serials = df['Serial']
+    for trim_start in range(len(serials)):
+        if serials[trim_start] >= min_serial:
+            break
+    if trim_start == 0:
+        return df
+    df = df.loc[trim_start:].copy()
+    df.index = np.arange(len(df['Serial']))
+    return df
+
+
+def AddDerivedValues(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     """Add some standard derived values to dataframe."""
     df['Serial'] = df['Date'].apply(StringDateToSerial)
+    if symbol in config.FIX_MIN_DATE:
+        min_serial = StringDateToSerial(config.FIX_MIN_DATE[symbol])
+        df = _trim_before_serial(df, min_serial)
+
     df['MidOpenClose'] = (df['Open'] + df['Close']) / 2.0
     df['MidHighLow'] = (df['High'] + df['Low']) / 2.0
     df['DiffHighLow'] = df['High'] - df['Low']
@@ -56,6 +74,7 @@ def AddDerivedValues(df: pd.DataFrame) -> None:
     # Add volatility metrics.
     PctVolatility(df, 'Close')
     Volatility(df, 'PctDailyGain')
+    return df
 
 
 def MeanValue(df: pd.DataFrame, field: str, window_size: int = MAX_WINDOW_SIZE):
