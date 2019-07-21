@@ -20,7 +20,7 @@ from typing import Tuple
 MAX_WINDOW_SIZE = 21
 
 # Last value calculated, used to check if derived values are present.
-_LAST_DERIVED_VALUE_CALCULATED = 'DailyGainPctVol'
+_LAST_DERIVED_VALUE_CALCULATED = 'PctDailyGainVol'
 
 
 def SerialDateToString(srl_no: int) -> str:
@@ -41,15 +41,21 @@ def AddDerivedValues(df: pd.DataFrame) -> None:
     df['DiffHighLow'] = df['High'] - df['Low']
     df['DiffHighLowPct'] = (100.0 * df['DiffHighLow'] / df['High']).apply(
         lambda x: min(x, 20.0))
-    df['DailyGain'] = df['Close'] - df['Open']
-    df['DailyGainPct'] = 100.0 * df['DailyGain'] / df['Close']
+    _open = df['Open'].values
+    close = df['Close'].values
+    next_open = np.roll(_open, -1)
+    next_open[-1] = close[-1]
+    daily_gain = next_open - _open
+    df['DailyGain'] = daily_gain
+    df['PctDailyGain'] = 100.0 * daily_gain / _open
+    df['LogDailyGain'] = np.log(next_open / _open)
     df['DeltaSerial'] = df['Serial'] - df['Serial'].shift(+1)
 
     MeanValue(df, 'Volume')
 
     # Add volatility metrics.
     PctVolatility(df, 'Close')
-    Volatility(df, 'DailyGainPct')
+    Volatility(df, 'PctDailyGain')
 
 
 def MeanValue(df: pd.DataFrame, field: str, window_size: int = MAX_WINDOW_SIZE):
@@ -96,7 +102,7 @@ def PctVolatility(df: pd.DataFrame, field: str ='Close', weight_field: str ='Vol
     df[field + 'PctVol'] = pct_volatility
 
 
-def Volatility(df: pd.DataFrame, field: str = 'DailyGainPct', weight_field: str ='Volume', window_size: int = MAX_WINDOW_SIZE):
+def Volatility(df: pd.DataFrame, field: str = 'PctDailyGain', weight_field: str ='Volume', window_size: int = MAX_WINDOW_SIZE):
     """Set field <field>+'Vol' with percentual volatility for each ticker."""
     values = df[field]
     weights = df[weight_field]

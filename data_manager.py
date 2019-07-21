@@ -74,4 +74,4 @@ class DataManager:
       raise ValueError(f'SaveData for unknown symbol "{symbol}"')
     df = self._data[symbol]
     p = self.PathForRawData(symbol)
-    df.to_csv(p + '/data.csv')
+    df.to_csv(p + '/data.csv', index=False)
