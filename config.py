@@ -52,6 +52,8 @@ TICKERS = [
     'XME',   # SPDR S&P Metals and Mining
     'GLD',   # The SPDR Gold Trust (GLD)
 
+    # Information Technology
+    'PSJ',
 ]
 
 # Trim data for some assets that have broken data. For each symbo defines the

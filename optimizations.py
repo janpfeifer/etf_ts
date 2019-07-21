@@ -1,8 +1,11 @@
 # optimizations contains many optimization functions, written for Tensorflow
+from absl import logging
 import math
+import numpy as np
 import tensorflow as tf
 from typing import Dict, List, Text, Tuple
 
+import config
 import tf_lib
 
 
@@ -91,3 +94,73 @@ def greedy_selection_for_period(argmax: tf.Tensor, values: List[tf.Tensor], mask
     values = [tf_lib.partial_matrix_reduce_sum(value, period)
               for value in values]
     return value_of_argmax_prev_value(argmax, values, mask, transposed=True, default=0.0)
+
+
+def mix(logits, gains, mask, loss_cost):
+    """Calculate the gains from the mix of assets given by the logits."""
+    assets_mix_logits_tiled = tf.tile(
+        tf.expand_dims(logits, axis=0), [gains.shape[0], 1])
+    # print(f'    mask.shape={mask.shape}')
+    # print(f'    assets_mix_logits_tiled.shape={assets_mix_logits_tiled.shape}')
+    assets_mix = tf_lib.masked_softmax(assets_mix_logits_tiled, mask)
+    # print(f'    assets_mix=({assets_mix.shape})\n{assets_mix}\n')
+    mixed_gains = tf.math.log(tf.reduce_sum(
+        assets_mix * tf.math.exp(gains), axis=-1))
+    # print(f'    mixed_gains=({mixed_gains.shape})\n{mixed_gains}\n')
+    adjusted_mixed_gains = adjust_log_gain(mixed_gains, loss_cost)
+    # print(f'    adjusted_mixed_gains=({adjusted_mixed_gains.shape})\n{adjusted_mixed_gains}\n')
+    total = total_gain_from_log_gains(mixed_gains)
+    total_adjusted = total_gain_from_log_gains(adjusted_mixed_gains)
+    return mixed_gains, adjusted_mixed_gains, total, total_adjusted, assets_mix
+
+
+def optimize_mix(symbols: List[Text], gains: tf.Tensor, mask: tf.Tensor,
+                 hparams: Dict[str, float]) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, np.array, np.array]:
+    """Find mix that maximizes gains."""
+    gains_t = tf.transpose(gains)  # shape=[serials, symbols]
+    mask_t = tf.transpose(mask)
+    assets_mix_logits = tf.Variable(
+        tf.zeros(dtype=tf.float32, shape=[len(symbols)]),
+        trainable=True)
+
+    # Maximize adjusted_mixed_gains ...
+    loss_cost = hparams['loss_cost']
+    learning_rate = hparams['learning_rate']
+    steps = int(hparams['steps'])
+    l1_l2_reg = tf.keras.regularizers.L1L2(l1=hparams['l1'], l2=hparams['l2'])
+
+    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+    for train_ii in range(steps):
+        with tf.GradientTape() as tape:
+            _, _, _, total_adjusted, _ = mix(
+                assets_mix_logits, gains_t, mask_t, loss_cost)
+            loss = l1_l2_reg(assets_mix_logits) - total_adjusted
+            trainable_vars = [assets_mix_logits]
+            grads = tape.gradient(loss, trainable_vars)
+            # print(f'    dtotal_dlogits={dtotal_dlogits}')
+            optimizer.apply_gradients(zip(grads, trainable_vars))
+            # assets_mix_logits.assign_sub(dtotal_dlogits * learning_rate)
+            if train_ii % 100 == 0:
+                logging.info(f'Training: step={train_ii}, total_adjusted={total_adjusted:.4f}')
+
+    mixed_gains, adjusted_mixed_gains, total, total_adjusted, assets_mix = mix(
+        assets_mix_logits, gains_t, mask_t, loss_cost)
+    return (mixed_gains, adjusted_mixed_gains, total, total_adjusted, assets_mix_logits.numpy(), assets_mix.numpy())
+
+    # print(f'*** total={total:.4f}, total_adjusted={total_adjusted:.4f},\n' +
+    #       f'    assets_mix: logits={assets_mix_logits.numpy()} last={assets_mix[-1]}\n')
+    # for ii in range(10):
+    #     rows = config.YEARLY_PERIOD_IN_SERIAL * (ii + 1)
+    #     last_year_gains = mixed_gains[-rows:]
+    #     last_year_gains = total_gain_from_log_gains(last_year_gains)
+    #     last_year_adjusted_gains = adjusted_mixed_gains[-rows:]
+    #     last_year_adjusted_gains = total_gain_from_log_gains(
+    #         last_year_adjusted_gains)
+    #     last_year_assets_mix = assets_mix[-rows].numpy()
+    #     np.set_printoptions(precision=4, linewidth=120, threshold=100)
+    #     print(f'    last {ii+1} year(s): total={last_year_gains:.4f}, total_adjusted={last_year_adjusted_gains:.4f}\n' +
+    #           f'                         mix={last_year_assets_mix}')
+
+    #     np.set_printoptions(precision=4, linewidth=120, threshold=100)
+    #     print(f'    last {ii+1} year(s): total={last_year_gains:.4f}, total_adjusted={last_year_adjusted_gains:.4f}\n' +
+    #           f'                         mix={last_year_assets_mix}')
