@@ -48,9 +48,11 @@ flags.DEFINE_float(
     'loss_cost', 1.1,
     'Relative cost of losses compared to gain: the larger this number the larger the penalty for volatility.')
 flags.DEFINE_list(
-    'stats', 'per_asset,greedy,average,optimal_mix,mix',
+    'stats', 'per_asset,greedy,average,optimal_mix,mix,selection',
     'List of stats to output. A selection of: per_asset, etc.'
 )
+flags.DEFINE_integer('mix_steps', 500,
+                     'Number of steps to optimize each period in mixed strategy.')
 flags.mark_flag_as_required('data')
 
 
@@ -103,6 +105,8 @@ def main(argv):
         mix_previous_period(symbols, mask, fields, all_serials)
     if 'per_asset' in FLAGS.stats:
         per_asset_gains(symbols, mask, fields)
+    if 'selection' in FLAGS.stats:
+        assets_selection(symbols, mask, fields, all_serials)
 
 
 def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
@@ -111,8 +115,13 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
     close = fields['Open']
     initial_values = tf_lib.masked_first(open_, mask)
     final_values = tf_lib.masked_last(close, mask)
+
     log_gains = fields['LogDailyGain']
     log_adjusted_gains = fields['LogAdjustedGains']
+
+    log_gains = log_gains[:, -config.REPORT_PERIOD:]
+    log_adjusted_gains = log_adjusted_gains[:, -config.REPORT_PERIOD:]
+
     total_gains = optimizations.total_gain_from_log_gains(log_gains)
     total_adjusted_gains = optimizations.total_gain_from_log_gains(
         log_adjusted_gains)
@@ -120,6 +129,7 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
     for symbol_idx, symbol in enumerate(symbols):
         gain = total_gains[symbol_idx]
         adjusted_gain = total_adjusted_gains[symbol_idx]
+
         initial_value = initial_values[symbol_idx]
         final_value = final_values[symbol_idx]
         print(f'{symbol},{gain:.4f},{adjusted_gain:.4f},{initial_value:.2f},{final_value:.2f}')
@@ -137,11 +147,16 @@ def greedy(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) 
 
             chosen_gains, chosen_adjusted_gains = optimizations.greedy_selection_for_period(
                 argmax, [log_gains, log_adjusted_gains], mask, period)
+
+            chosen_gains = chosen_gains[-config.REPORT_PERIOD:]
+            chosen_adjusted_gains = chosen_adjusted_gains[-config.REPORT_PERIOD:]
+
             total = optimizations.total_gain_from_log_gains(chosen_gains)
             total_adjusted = optimizations.total_gain_from_log_gains(
                 chosen_adjusted_gains)
             print(f'_Greedy {period_desc[period_idx]} {argmax_desc[argmax_idx]},{total:.4f},{total_adjusted:.4f},,,' +
-                  f'Selecting asset with best {argmax_desc[argmax_idx]} yield of last {period_desc[period_idx]} period')
+                  f'Selecting asset with best {argmax_desc[argmax_idx]} yield of last {period_desc[period_idx]} period. ' +
+                  f' Gains of last {config.REPORT_PERIOD_YEARS}')
 
 
 def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
@@ -154,15 +169,13 @@ def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor])
         chosen_gains, FLAGS.loss_cost)
 
     # Select last 10 years.
-    years = 10
-    rows = config.YEARLY_PERIOD_IN_SERIAL * years
-    chosen_gains = chosen_gains[-rows:]
-    chosen_adjusted_gains = chosen_adjusted_gains[-rows:]
+    chosen_gains = chosen_gains[-config.REPORT_PERIOD:]
+    chosen_adjusted_gains = chosen_adjusted_gains[-config.REPORT_PERIOD:]
 
     total = optimizations.total_gain_from_log_gains(chosen_gains)
     total_adjusted = optimizations.total_gain_from_log_gains(
         chosen_adjusted_gains)
-    print(f'_Average (last {years} years),{total:.4f},{total_adjusted:.4f},,,Average gains of all assets tracked.')
+    print(f'_Average (last {config.REPORT_PERIOD_YEARS} years),{total:.4f},{total_adjusted:.4f},,,Average gains of all assets tracked.')
 
 
 def optimal_mix(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
@@ -178,37 +191,32 @@ def optimal_mix(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tens
         optimizations.optimize_mix(symbols, log_gains, mask, hparams))
 
     # Take only last 10 years:
-    years = 10
-    rows = config.YEARLY_PERIOD_IN_SERIAL * years
-    last_year_gains = mixed_gains[-rows:]
+    last_year_gains = mixed_gains[-config.REPORT_PERIOD:]
     total = optimizations.total_gain_from_log_gains(last_year_gains)
-    last_year_adjusted_gains = adjusted_mixed_gains[-rows:]
+    last_year_adjusted_gains = adjusted_mixed_gains[-config.REPORT_PERIOD:]
     total_adjusted = optimizations.total_gain_from_log_gains(
         last_year_adjusted_gains)
-    print(f'_Oracle Mix (last {years} years),{total:.4f},{total_adjusted:.4f},,,Best fixed mixed logist (softmax-ed according to availability of asset).')
+    print(f'_Oracle Mix (last {config.REPORT_PERIOD_YEARS} years),{total:.4f},{total_adjusted:.4f},,,' +
+          f'Best fixed mixed logist (softmax-ed according to availability of asset).')
 
 
 def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor], all_serials: List[int]) -> None:
     log_gains = fields['LogDailyGain']
-    training_period = 4 * config.YEARLY_PERIOD_IN_SERIAL
-    use_period = 1 * config.YEARLY_PERIOD_IN_SERIAL // 3
-
     hparams = {
-        'steps': 500,
+        'steps': FLAGS.mix_steps,
         'learning_rate': 3.3e-2,
         'loss_cost': FLAGS.loss_cost,
         'l1': 1e-2,
         'l2': 1e-5,
     }
-    years = 10
     all_gains: List[tf.Tensor] = []
     all_adjusted_gains: List[tf.Tensor] = []
-    for last_ii_year in range(years * config.YEARLY_PERIOD_IN_SERIAL // use_period):
+    for last_ii_year in range(config.REPORT_PERIOD // config.APPLYING_PERIOD):
         # Identify range where to apply new mix.
-        apply_start = (-last_ii_year - 1) * use_period
+        apply_start = (-last_ii_year - 1) * config.APPLYING_PERIOD
         apply_start_date = asset_measures.SerialDateToString(
             all_serials[apply_start])
-        apply_end = -last_ii_year * use_period
+        apply_end = -last_ii_year * config.APPLYING_PERIOD
         apply_end_date = asset_measures.SerialDateToString(
             all_serials[min(apply_end, -1)])
         logging.info(f'Calculating mix for range {apply_start_date} ({apply_start}) to {apply_end_date} ({apply_end})')
@@ -220,9 +228,9 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
             apply_mask = mask[:, apply_start:apply_end]
         # print(f'gains.shape={log_gains.shape}, apply_gains.shape={apply_gains.shape}')
 
-        # Find best mix based on last 5 years.
+        # Find best mix based on last config.TRAINING_PERIOD cycles (a few years).
         train_end = apply_start
-        train_start = train_end - training_period
+        train_start = train_end - config.TRAINING_PERIOD
         train_gains = log_gains[:, train_start:train_end]
         # print(f'gains.shape={log_gains.shape}, train_gains.shape={train_gains.shape}')
         train_mask = mask[:, train_start:train_end]
@@ -247,7 +255,30 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
     total = optimizations.total_gain_from_log_gains(all_gains)
     total_adjusted = optimizations.total_gain_from_log_gains(
         all_adjusted_gains)
-    print(f'_Mix (last {years} years),{total:.4f},{total_adjusted:.4f},,,Trained with previous 4 years - adjusted quarterly.')
+    print(f'_Mix (last {config.REPORT_PERIOD_YEARS} years),{total:.4f},{total_adjusted:.4f},,,Trained with previous 4 years - adjusted quarterly.')
+
+
+def assets_selection(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor], all_serials: List[int]) -> None:
+    log_gains = fields['LogDailyGain']
+    hparams = {
+        'steps': FLAGS.mix_steps,
+        'learning_rate': 3.3e-2,
+        'loss_cost': FLAGS.loss_cost,
+        'l1': 1e-2,
+        'l2': 1e-5,
+    }
+
+    # Find best mix based on last config.TRAINING_PERIOD cycles (a few years).
+    train_gains = log_gains[:, -config.TRAINING_PERIOD:]
+    train_mask = mask[:, -config.TRAINING_PERIOD:]
+    (_, _, _, _, _, assets_mix) = optimizations.optimize_mix(
+        symbols, train_gains, train_mask, hparams)
+    mix = assets_mix[-1]
+    print(f'mix.shape={mix.shape}')
+    pairs = [(-mix[ii], symbol) for (ii, symbol) in enumerate(symbols)]
+    pairs = sorted(pairs)
+    for neg_ratio, symbol in pairs:
+        print(f'{symbol},{-neg_ratio:.4f}')
 
 
 if __name__ == '__main__':
