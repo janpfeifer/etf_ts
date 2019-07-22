@@ -271,14 +271,15 @@ def assets_selection(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf
     # Find best mix based on last config.TRAINING_PERIOD cycles (a few years).
     train_gains = log_gains[:, -config.TRAINING_PERIOD:]
     train_mask = mask[:, -config.TRAINING_PERIOD:]
-    (_, _, _, _, _, assets_mix) = optimizations.optimize_mix(
+    (_, _, _, _, assets_logits, assets_mix) = optimizations.optimize_mix(
         symbols, train_gains, train_mask, hparams)
-    mix = assets_mix[-1]
-    print(f'mix.shape={mix.shape}')
-    pairs = [(-mix[ii], symbol) for (ii, symbol) in enumerate(symbols)]
+    # mix = assets_mix[-1]
+    mix = tf.nn.softmax(assets_logits)
+    pairs = [(-mix[ii], symbol, assets_logits[ii])
+             for (ii, symbol) in enumerate(symbols)]
     pairs = sorted(pairs)
-    for neg_ratio, symbol in pairs:
-        print(f'{symbol},{-neg_ratio:.4f}')
+    for neg_ratio, symbol, logit in pairs:
+        print(f'{symbol},{-neg_ratio:.4g},{logit:.4g}')
 
 
 if __name__ == '__main__':

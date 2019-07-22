@@ -51,6 +51,7 @@ TICKERS = [
     'PICK',  # The iShares MSCI Global Select Metals & Mining Producers ETF
     'XME',   # SPDR S&P Metals and Mining
     'GLD',   # The SPDR Gold Trust (GLD)
+    'SGOL',  # Aberdeen Standard Investments Physical Swiss Gold Shares ETF
 
     # Information Technology
     'PSJ',
