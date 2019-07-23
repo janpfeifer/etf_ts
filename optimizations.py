@@ -134,7 +134,8 @@ def optimize_mix(symbols: List[Text], gains: tf.Tensor, mask: tf.Tensor,
         with tf.GradientTape() as tape:
             _, _, _, total_adjusted, _ = mix(
                 assets_mix_logits, gains_t, mask_t, loss_cost)
-            loss = l1_l2_reg(assets_mix_logits) - total_adjusted
+            assets_mix = tf.nn.softmax(assets_mix_logits)
+            loss = l1_l2_reg(assets_mix) - total_adjusted
             trainable_vars = [assets_mix_logits]
             grads = tape.gradient(loss, trainable_vars)
             # print(f'    dtotal_dlogits={dtotal_dlogits}')

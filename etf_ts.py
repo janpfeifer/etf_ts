@@ -51,7 +51,7 @@ flags.DEFINE_list(
     'stats', 'per_asset,greedy,average,optimal_mix,mix,selection',
     'List of stats to output. A selection of: per_asset, etc.'
 )
-flags.DEFINE_integer('mix_steps', 500,
+flags.DEFINE_integer('mix_steps', 200,
                      'Number of steps to optimize each period in mixed strategy.')
 flags.mark_flag_as_required('data')
 
@@ -206,8 +206,8 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
         'steps': FLAGS.mix_steps,
         'learning_rate': 3.3e-2,
         'loss_cost': FLAGS.loss_cost,
-        'l1': 1e-2,
-        'l2': 1e-5,
+        'l1': 1e-3,
+        'l2': 1e-6,
     }
     all_gains: List[tf.Tensor] = []
     all_adjusted_gains: List[tf.Tensor] = []
@@ -264,8 +264,8 @@ def assets_selection(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf
         'steps': FLAGS.mix_steps,
         'learning_rate': 3.3e-2,
         'loss_cost': FLAGS.loss_cost,
-        'l1': 1e-2,
-        'l2': 1e-5,
+        'l1': 1e-3,
+        'l2': 1e-6,
     }
 
     # Find best mix based on last config.TRAINING_PERIOD cycles (a few years).
@@ -275,11 +275,16 @@ def assets_selection(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf
         symbols, train_gains, train_mask, hparams)
     # mix = assets_mix[-1]
     mix = tf.nn.softmax(assets_logits)
+    mix = tf.where(mix > 0.01, mix, tf.zeros_like(mix))
+    norm = tf.reduce_sum(mix)
+    norm = tf.where(norm == 0, 1.0, norm)
+    mix = mix / norm
     pairs = [(-mix[ii], symbol, assets_logits[ii])
              for (ii, symbol) in enumerate(symbols)]
     pairs = sorted(pairs)
     for neg_ratio, symbol, logit in pairs:
-        print(f'{symbol},{-neg_ratio:.4g},{logit:.4g}')
+        if -neg_ratio > 0.1:
+            print(f'{symbol},{-neg_ratio:.4g},{logit:.4g}')
 
 
 if __name__ == '__main__':

@@ -13,8 +13,8 @@ TICKERS = [
     'IVOV', 'MGC', 'MGK', 'MGV', 'VAW',
     'VB', 'VBK', 'VBR', 'VCIT', 'VCLT',
     'VCR', 'VCSH', 'VDC', 'VDE', 'VEA',
-    'VEU', 'VFH', 'VGIT',
-    'VGK', 'VGLT', 'VGSH', 'VGT',
+    'VEU', 'VFH',
+    'VGK', 'VGSH', 'VGT',
     'VHT', 'VIG', 'VIGI', 'VIOG',
     'VIOO', 'VIOV', 'VIS', 'VMBS', 'VNQ',
     'VNQI',
@@ -52,6 +52,14 @@ TICKERS = [
     'XME',   # SPDR S&P Metals and Mining
     'GLD',   # The SPDR Gold Trust (GLD)
     'SGOL',  # Aberdeen Standard Investments Physical Swiss Gold Shares ETF
+
+    # Bonds
+    'IEF',   # iShares 7-10 Year Treasury Bond ETF
+    'TLT',   # iShares 20+ Year Treasury Bond ETF
+    'GOVT',  # iShares US Treasury Bond ETF
+    'VGIT',  # Vanguard Intermiate Term Treasury ETF
+    'VGLT',  # Vanguard Long-Term Treasury ETF
+    'FEMB',  # First Trust Emerging Markets Local Currency Bond ETF
 
     # Information Technology
     'PSJ',
