@@ -41,6 +41,7 @@ TICKERS = [
     # Indices
     'VNRT.L',  # FTSE North America UCITS ETF (USD) Distributing (VNRT)
     'VUSA.L',  # S&P 500 UCITS ETF (USD) Tracks the performance of the S&P 500.
+    'BNDW',    # Vanguard Total World Bond ETF, tracks the performance of the Bloomberg Barclays Global Aggregate Float Adjusted Composite Index
 
     # Mixes
     'GSLC',  # ActiveBeta U.S. Large Cap Equity ETF
