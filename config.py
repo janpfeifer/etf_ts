@@ -9,13 +9,13 @@ from __future__ import print_function
 
 TICKERS = [
     'BIV', 'BLV', 'BND', 'BNDW', 'BNDX',
-    'BSV', 'EDV', 'IVOG', 'IVOO',
+    'BSV', 'IVOG', 'IVOO',
     'IVOV', 'MGC', 'MGK', 'MGV', 'VAW',
     'VB', 'VBK', 'VBR', 'VCIT', 'VCLT',
     'VCR', 'VCSH', 'VDC', 'VDE', 'VEA',
     'VEU', 'VFH',
     'VGK', 'VGSH', 'VGT',
-    'VHT', 'VIG', 'VIGI', 'VIOG',
+    'VIG', 'VIGI', 'VIOG',
     'VIOO', 'VIOV', 'VIS', 'VMBS', 'VNQ',
     'VNQI',
     'VO',
@@ -29,7 +29,6 @@ TICKERS = [
     'VOT',  # Vanguard Mid-Cap Growth ETF (VOT)
     'VOX',
     'VPL',
-    'VPU',
     'VSS',
     'VT',
     'VTC', 'VTEB', 'VTHR', 'VTI',
@@ -39,19 +38,27 @@ TICKERS = [
 
     #
 
-    # European companies.
-    'VNRT.L',
+    # Indices
+    'VNRT.L',  # FTSE North America UCITS ETF (USD) Distributing (VNRT)
+    'VUSA.L',  # S&P 500 UCITS ETF (USD) Tracks the performance of the S&P 500.
 
-    # S&P 500 UCITS ETF (USD) Tracks the performance of the S&P 500.
-    'VUSA.L',
+    # Mixes
+    'GSLC',  # ActiveBeta U.S. Large Cap Equity ETF
 
-    # Strategic metals / materials:
+    # Bonds.
+    'EDV',  # Vanguard Extended Duration Treasury ETF -> US extended bonds.
+
+    # Strategic metals, materials and water.
     'REMX',  # The VanEck Vectors Rare Earth/Strategic Metals
-    'PALL',  # The ETFS Physical Palladium Shares
+    # 'PALL',  # The ETFS Physical Palladium Shares -> Equivalent to PHPD.L
     'PICK',  # The iShares MSCI Global Select Metals & Mining Producers ETF
     'XME',   # SPDR S&P Metals and Mining
-    'GLD',   # The SPDR Gold Trust (GLD)
-    'SGOL',  # Aberdeen Standard Investments Physical Swiss Gold Shares ETF
+    # 'GLD',   # The SPDR Gold Trust (GLD) -> Equivalent to SGLD.L
+    # 'SGOL',  # Aberdeen Standard Investments Physical Swiss Gold Shares421.5440 ETF -> SGLD.L equivalent
+    #'ZGLD',  # ZKB Gold ETF AA CHF Klasse (SWX)
+    #'ZPAL',  # ZKB ZKB Palladium ETF (SWX)
+    'PHPD.L',  # Palladium ETFS PHPD INAV -> Equivalent to PALL
+    'SGLD.L',  # SRC PH/ASST BKD 21001231 SER -> SGOL equivalent
 
     # Bonds
     'IEF',   # iShares 7-10 Year Treasury Bond ETF
@@ -60,9 +67,25 @@ TICKERS = [
     'VGIT',  # Vanguard Intermiate Term Treasury ETF
     'VGLT',  # Vanguard Long-Term Treasury ETF
     'FEMB',  # First Trust Emerging Markets Local Currency Bond ETF
+    # 'AWTAX',  # AllianzGI Global Water Fund A (AWTAX)
 
     # Information Technology
-    'PSJ',
+    'PSJ',   # Invesco Dynamic Software ETF
+    'IGV',   # iShares Expanded Tech-Software ETF
+    'HACK',  # ETF MANAGERS TR/ETFMG PRIME CYBER Security
+    'CLOU',  # Global X Cloud Computing ETF
+    'XSW',   # SPDR S&P Software & Services ETF
+    'GAMR',  # ETFMG Video Game Tech ETF
+
+    # Health
+    'XLV',   # Health Care Select Sector SPDR Fund
+    'VHT',   # Vanguard Healthcare ETF
+    'IBB',   # iShares Nasdaq Biotechnology ETF
+    'XBI',   # SPDR S&P Biotech ETF
+    'IHI',   # iShares U.S. Medical Devices ETF
+
+    # Utilities
+    'VPU',   # Vanguard Utilities Index Fund ETF Shares
 ]
 
 # Trim data for some assets that have broken data. For each symbo defines the
@@ -70,6 +93,10 @@ TICKERS = [
 FIX_MIN_DATE = {
     'VIG': '2006-01-01',
     'VOT': '2006-08-25',
+}
+
+FIX_MISSING_OPEN = {
+    'AWTAX',
 }
 
 # Only consider information after this date: before this most ETFs didn't exist.

@@ -32,6 +32,13 @@ def total_gain_from_log_gains(values: tf.Tensor) -> tf.Tensor:
     return tf.math.exp(sum)
 
 
+def total_annualized_gain_from_log_gains(values: tf.Tensor) -> tf.Tensor:
+    """Returns annualized (p.a) gains, converted in %."""
+    years = values.shape[-1] / float(config.YEARLY_PERIOD_IN_SERIAL)
+    sum = tf.reduce_sum(values, axis=-1)
+    return 100.0 * tf.math.exp(sum / years) - 100.0
+
+
 def value_of_argmax_prev_value(argmax_values: tf.Tensor, values: List[tf.Tensor],
                                mask: tf.Tensor, transposed: bool, default: float) -> List[tf.Tensor]:
     """Returns the value of the column that is the max of the previous row, and adjusted mask.

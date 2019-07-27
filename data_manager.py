@@ -66,7 +66,10 @@ class DataManager:
           self._DownloadRawDataToFile(symbol)
 
     # Convert CSV file to a Pandas dataframe.
-    self._data[symbol] = pd.read_csv(p + '/data.csv')
+    df = pd.read_csv(p + '/data.csv')
+    if 'Date' not in df or len(df['Date']) == 0:
+      raise ValueError(f'Failed to load data for {symbol}')
+    self._data[symbol] = df
 
   def SaveData(self, symbol: str) -> None:
     """Saves updated data for given symbol: this is useful to cache also dervided columns. Timestamp is unchanged."""

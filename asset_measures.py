@@ -53,6 +53,11 @@ def AddDerivedValues(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
     if symbol in config.FIX_MIN_DATE:
         min_serial = StringDateToSerial(config.FIX_MIN_DATE[symbol])
         df = _trim_before_serial(df, min_serial)
+    if symbol in config.FIX_MISSING_OPEN:
+        df['Open'] = np.concatenate([[df['Close'][0]], df['Close'][:-1]])
+        df['Volume'] = np.ones_like(df['Close'])
+        df['High'] = np.maximum(df['Open'], df['Close'])
+        df['Low'] = np.minimum(df['Open'], df['Close'])
 
     df['MidOpenClose'] = (df['Open'] + df['Close']) / 2.0
     df['MidHighLow'] = (df['High'] + df['Low']) / 2.0

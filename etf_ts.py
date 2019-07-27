@@ -38,6 +38,8 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     'data', None,
     'Base path where to store historical marked data. Can be shared across models')
+flags.DEFINE_integer('max_age_days', 10,
+                     'Maximum number of days before updating cached data.')
 flags.DEFINE_list(
     'symbols', None,
     'List of sBase path where to store historical marked data. Can be shared across models')
@@ -51,7 +53,7 @@ flags.DEFINE_list(
     'stats', 'per_asset,greedy,average,optimal_mix,mix,selection',
     'List of stats to output. A selection of: per_asset, etc.'
 )
-flags.DEFINE_integer('mix_steps', 200,
+flags.DEFINE_integer('mix_steps', 300,
                      'Number of steps to optimize each period in mixed strategy.')
 flags.mark_flag_as_required('data')
 
@@ -68,7 +70,7 @@ def main(argv):
     # Download data or reload it from disk cache.
     dmgr = data_manager.DataManager(FLAGS.data)
     for symbol in symbols:
-        dmgr.DownloadRawData(symbol)
+        dmgr.DownloadRawData(symbol, max_age_days=FLAGS.max_age_days)
 
     # Calculate independent (from each other) derived information if not loaded from cache.
     for symbol in symbols:
@@ -122,8 +124,8 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
     log_gains = log_gains[:, -config.REPORT_PERIOD:]
     log_adjusted_gains = log_adjusted_gains[:, -config.REPORT_PERIOD:]
 
-    total_gains = optimizations.total_gain_from_log_gains(log_gains)
-    total_adjusted_gains = optimizations.total_gain_from_log_gains(
+    total_gains = optimizations.total_annualized_gain_from_log_gains(log_gains)
+    total_adjusted_gains = optimizations.total_annualized_gain_from_log_gains(
         log_adjusted_gains)
 
     for symbol_idx, symbol in enumerate(symbols):
@@ -151,12 +153,13 @@ def greedy(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) 
             chosen_gains = chosen_gains[-config.REPORT_PERIOD:]
             chosen_adjusted_gains = chosen_adjusted_gains[-config.REPORT_PERIOD:]
 
-            total = optimizations.total_gain_from_log_gains(chosen_gains)
-            total_adjusted = optimizations.total_gain_from_log_gains(
+            total = optimizations.total_annualized_gain_from_log_gains(
+                chosen_gains)
+            total_adjusted = optimizations.total_annualized_gain_from_log_gains(
                 chosen_adjusted_gains)
             print(f'_Greedy {period_desc[period_idx]} {argmax_desc[argmax_idx]},{total:.4f},{total_adjusted:.4f},,,' +
                   f'Selecting asset with best {argmax_desc[argmax_idx]} yield of last {period_desc[period_idx]} period. ' +
-                  f' Gains of last {config.REPORT_PERIOD_YEARS}')
+                  f' Gains (p.a.) of last {config.REPORT_PERIOD_YEARS}')
 
 
 def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
@@ -172,10 +175,10 @@ def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor])
     chosen_gains = chosen_gains[-config.REPORT_PERIOD:]
     chosen_adjusted_gains = chosen_adjusted_gains[-config.REPORT_PERIOD:]
 
-    total = optimizations.total_gain_from_log_gains(chosen_gains)
-    total_adjusted = optimizations.total_gain_from_log_gains(
+    total = optimizations.total_annualized_gain_from_log_gains(chosen_gains)
+    total_adjusted = optimizations.total_annualized_gain_from_log_gains(
         chosen_adjusted_gains)
-    print(f'_Average (last {config.REPORT_PERIOD_YEARS} years),{total:.4f},{total_adjusted:.4f},,,Average gains of all assets tracked.')
+    print(f'_Value of an averaged account (last {config.REPORT_PERIOD_YEARS} years),{total:.4f},{total_adjusted:.4f},,,Gains (p.a.) of an even mix of all assets tracked.')
 
 
 def optimal_mix(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
@@ -252,8 +255,8 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
     all_adjusted_gains = tf.concat(all_adjusted_gains, axis=-1)
     # print(f'all_gains={all_gains.shape} {all_gains}')
     # print(f'all_adjusted_gains={all_adjusted_gains.shape} {all_adjusted_gains}')
-    total = optimizations.total_gain_from_log_gains(all_gains)
-    total_adjusted = optimizations.total_gain_from_log_gains(
+    total = optimizations.total_annualized_gain_from_log_gains(all_gains)
+    total_adjusted = optimizations.total_annualized_gain_from_log_gains(
         all_adjusted_gains)
     print(f'_Mix (last {config.REPORT_PERIOD_YEARS} years),{total:.4f},{total_adjusted:.4f},,,Trained with previous 4 years - adjusted quarterly.')
 
@@ -283,8 +286,9 @@ def assets_selection(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf
              for (ii, symbol) in enumerate(symbols)]
     pairs = sorted(pairs)
     for neg_ratio, symbol, logit in pairs:
-        if -neg_ratio > 0.1:
-            print(f'{symbol},{-neg_ratio:.4g},{logit:.4g}')
+        ratio = -neg_ratio
+        if ratio > 0.0:
+            print(f'{symbol},{100.0*ratio:3.0f}%,{logit:.4g}')
 
 
 if __name__ == '__main__':
