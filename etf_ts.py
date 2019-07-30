@@ -25,7 +25,7 @@ from absl import logging
 import sys
 import numpy as np
 import tensorflow as tf
-from typing import Dict, List, Text
+from typing import Dict, List, Text, Tuple
 
 import asset_measures
 import config
@@ -51,7 +51,7 @@ flags.DEFINE_float(
     'loss_cost', 1.1,
     'Relative cost of losses compared to gain: the larger this number the larger the penalty for volatility.')
 flags.DEFINE_list(
-    'stats', 'per_asset,greedy,average,optimal_mix,mix,selection',
+    'stats', 'per_asset,greedy,average,mix,selection',
     'List of stats to output. A selection of: per_asset, etc.'
 )
 flags.DEFINE_integer('mix_steps', 300,
@@ -59,7 +59,7 @@ flags.DEFINE_integer('mix_steps', 300,
 flags.mark_flag_as_required('data')
 
 flags.DEFINE_float(
-    'mix_training_period', 1.0,
+    'mix_training_period', 2.0,
     'For the mix strategy, the amount of years (fractional) used for training before selecting.')
 flags.DEFINE_float(
     'mix_applying_period', 0.25,
@@ -69,6 +69,8 @@ flags.DEFINE_float(
 
 def main(argv):
     del argv  # Unused.
+
+    tf_lib.config_gpu()
 
     # Select and sort symbols.
     symbols = FLAGS.symbols
@@ -104,14 +106,12 @@ def main(argv):
         average(symbols, mask, fields)
     # if 'greedy' in FLAGS.stats:
     #     greedy(symbols, mask, fields)
-    # if 'optimal_mix' in FLAGS.stats:
-    #     optimal_mix(symbols, mask, fields)
     if 'mix' in FLAGS.stats:
         mix_previous_period(symbols, mask, fields, all_serials)
     if 'per_asset' in FLAGS.stats:
         per_asset_gains(symbols, mask, fields)
-    # if 'selection' in FLAGS.stats:
-    #     assets_selection(symbols, mask, fields, all_serials)
+    if 'selection' in FLAGS.stats:
+        assets_selection(symbols, mask, fields, all_serials)
 
 
 def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
@@ -180,29 +180,6 @@ def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor])
     print(f'_Average (last {config.REPORT_PERIOD_YEARS} years),{average:.4f},{adjusted_average:.4f},,,Gains (p.a.), readjusted every year.')
 
 
-def optimal_mix(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
-    log_gains = fields['LogDailyGain']
-    log_gains = tf.where(mask, log_gains, tf.zeros_like(log_gains))
-    hparams = {
-        'steps': 1000,
-        'learning_rate': 1.0e-1,
-        'loss_cost': FLAGS.loss_cost,
-        'l1': 1e-2,
-        'l2': 1e-5,
-    }
-    (mix_gain, adjusted_mix_gain, mix_logits, mix) = (
-        optimizations.optimize_mix(symbols, symbols_mask, log_gains, hparams))
-
-    # Take only last 10 years:
-    last_year_gains = mixed_gains[-config.REPORT_PERIOD:]
-    total = optimizations.total_gain_from_log_gains(last_year_gains)
-    last_year_adjusted_gains = adjusted_mixed_gains[-config.REPORT_PERIOD:]
-    total_adjusted = optimizations.total_gain_from_log_gains(
-        last_year_adjusted_gains)
-    print(f'_Oracle Mix (last {config.REPORT_PERIOD_YEARS} years),{total:.4f},{total_adjusted:.4f},,,' +
-          f'Best fixed mixed logist (softmax-ed according to availability of asset).')
-
-
 def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor], all_serials: List[int]) -> None:
     log_gains = tf.convert_to_tensor(fields['LogDailyGain'], dtype=tf.float32)
     hparams = {
@@ -249,6 +226,9 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
 
         (mix_gain, adjusted_mix_gain, mix_logits, mix) = (
             optimizations.optimize_mix(symbols, symbols_used, train_gains, hparams))
+        selection = _normalize_selection(symbols, mix_logits, symbols_used)
+        selection = [f'{symbol}: {ratio:3.1f}%' for ratio, symbol in selection]
+        logging.info('  Selection of assets: {}'.format(', '.join(selection)))
 
         # Apply mix to apply gains.
         mix_gain, adjusted_mix_gain = optimizations.mix_gain(
@@ -257,50 +237,61 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
         adjusted_mix_gain = optimizations.annualized_gain(
             adjusted_mix_gain, apply_cycles)
 
-        print(f'  Applying it to next period: mix_gain={mix_gain:.4f}, adjusted_mix_gain={adjusted_mix_gain:.4f}')
+        # print(f'  Applying it to next period: mix_gain={mix_gain:.4f}, adjusted_mix_gain={adjusted_mix_gain:.4f}')
         all_gains = [mix_gain] + all_gains
         all_adjusted_gains = [adjusted_mix_gain] + all_adjusted_gains
 
-    # all_gains = tf.concat(all_gains, axis=-1)
-    # all_adjusted_gains = tf.concat(all_adjusted_gains, axis=-1)
-    # # print(f'all_gains={all_gains.shape} {all_gains}')
-    # # print(f'all_adjusted_gains={all_adjusted_gains.shape} {all_adjusted_gains}')
-    # total = optimizations.total_annualized_gain_from_log_gains(all_gains)
-    # total_adjusted = optimizations.total_annualized_gain_from_log_gains(
-    #     all_adjusted_gains)
-    # print(f'_Mix (last {config.REPORT_PERIOD_YEARS} years),{total:.4f},{total_adjusted:.4f},,,Trained with previous 4 years - adjusted quarterly.')
+    all_gains = np.array(all_gains)
+    all_adjusted_gains = np.array(all_adjusted_gains)
+    mix_gain = np.mean(all_gains)
+    adjusted_mix_gain = np.mean(all_adjusted_gains)
+    mix_gain = 100.0 * (mix_gain - 1)
+    adjusted_mix_gain = 100.0 * (adjusted_mix_gain - 1)
+
+    print(f'_Mix (last {config.REPORT_PERIOD_YEARS} years),' +
+          f'{mix_gain:.4f},{adjusted_mix_gain:.4f},,,' +
+          f'Trained with preceding {FLAGS.mix_training_period} year(s) ' +
+          f'and then applied for {FLAGS.mix_applying_period} year(s).')
+
+
+def _normalize_selection(symbols: List[Text], logits: tf.Tensor, logits_mask: tf.Tensor) -> List[Tuple[float, Text]]:
+    """Select list of assets and its percentual participation after normalization."""
+    mix = tf_lib.masked_softmax(logits, logits_mask)
+    mix = tf.where(mix >= 0.01, mix, tf.zeros_like(mix))
+    norm = tf.reduce_sum(mix)
+    norm = tf.where(norm == 0, 1.0, norm)
+    mix = 100.0 * mix / norm
+    mix = mix.numpy()
+    pairs = [(mix[ii], symbol)
+             for (ii, symbol) in enumerate(symbols)
+             if mix[ii] > 0.0]
+    pairs = sorted(pairs, reverse=True)
+    return pairs
 
 
 def assets_selection(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor], all_serials: List[int]) -> None:
-    log_gains = fields['LogDailyGain']
+    log_gains = tf.convert_to_tensor(fields['LogDailyGain'], dtype=tf.float32)
     hparams = {
         'steps': FLAGS.mix_steps,
-        'learning_rate': 3.3e-2,
+        'learning_rate': 0.1,
         'loss_cost': FLAGS.loss_cost,
         'l1': 1e-3,
         'l2': 1e-6,
     }
 
     # Find best mix based on last (config.YEARLY_PERIOD_IN_SERIAL * FLAGS.mix_training_period) cycles (a few years).
-    train_gains = log_gains[:, -
-                            int(config.YEARLY_PERIOD_IN_SERIAL * FLAGS.mix_training_period):]
-    train_mask = mask[:, -int(config.YEARLY_PERIOD_IN_SERIAL *
-                              FLAGS.mix_training_period):]
-    (_, _, _, _, assets_logits, assets_mix) = optimizations.optimize_mix(
-        symbols, train_gains, train_mask, hparams)
-    # mix = assets_mix[-1]
-    mix = tf.nn.softmax(assets_logits)
-    mix = tf.where(mix > 0.01, mix, tf.zeros_like(mix))
-    norm = tf.reduce_sum(mix)
-    norm = tf.where(norm == 0, 1.0, norm)
-    mix = mix / norm
-    pairs = [(-mix[ii], symbol, assets_logits[ii])
-             for (ii, symbol) in enumerate(symbols)]
-    pairs = sorted(pairs)
-    for neg_ratio, symbol, logit in pairs:
-        ratio = -neg_ratio
-        if ratio > 0.0:
-            print(f'{symbol},{100.0*ratio:3.0f}%,{logit:.4g}')
+    train_cycles = int(config.YEARLY_PERIOD_IN_SERIAL *
+                       FLAGS.mix_training_period)
+    train_gains = log_gains[-train_cycles:, :]
+    train_mask = mask[-train_cycles:, :]
+    symbols_used = tf.reduce_any(train_mask, axis=0)
+    (mix_gain, adjusted_mix_gain, mix_logits, mix) = (
+        optimizations.optimize_mix(symbols, symbols_used, train_gains, hparams))
+    selection = _normalize_selection(symbols, mix_logits, symbols_used)
+    selection_str = [f'{symbol}: {ratio:3.1f}%' for ratio, symbol in selection]
+    print('_selection,{}'.format(','.join(selection_str)))
+    for ratio, symbol in selection:
+        print(f'{symbol},{ratio:3.1f}%')
 
 
 def greedy(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
