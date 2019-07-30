@@ -102,16 +102,16 @@ def main(argv):
     print('Symbol,Gain,Adjusted Gain,Initial,Final,Description')
     if 'average' in FLAGS.stats:
         average(symbols, mask, fields)
-    if 'greedy' in FLAGS.stats:
-        greedy(symbols, mask, fields)
-    if 'optimal_mix' in FLAGS.stats:
-        optimal_mix(symbols, mask, fields)
+    # if 'greedy' in FLAGS.stats:
+    #     greedy(symbols, mask, fields)
+    # if 'optimal_mix' in FLAGS.stats:
+    #     optimal_mix(symbols, mask, fields)
     if 'mix' in FLAGS.stats:
         mix_previous_period(symbols, mask, fields, all_serials)
     if 'per_asset' in FLAGS.stats:
         per_asset_gains(symbols, mask, fields)
-    if 'selection' in FLAGS.stats:
-        assets_selection(symbols, mask, fields, all_serials)
+    # if 'selection' in FLAGS.stats:
+    #     assets_selection(symbols, mask, fields, all_serials)
 
 
 def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
