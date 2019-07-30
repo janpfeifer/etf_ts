@@ -6,19 +6,33 @@ import optimizations
 
 class OptimizationsTest(tf.test.TestCase):
 
-    def test_adjust_gain(self):
+    def test_mix_gain(self):
+        logits = tf.convert_to_tensor([1.0, 1.0])
+        gains = tf.convert_to_tensor([
+            [1.5, 2.0, 1],
+            [0.25, 1, 2]])
+        log_gains = tf.math.log(gains)
+        mix_gain, adjusted_mix_gain = optimizations.mix_gain(
+            logits, tf.transpose(log_gains), 1.1)
+        print(f'mix_gain={mix_gain.numpy()}, adjusted_mix_gain={adjusted_mix_gain.numpy()}')
+        self.assertNear(mix_gain, 1.625, 1e-4)
+        self.assertNear(adjusted_mix_gain, 1.6046875715255737, 1e-4)
+
+    def test_adjusted_log_gains(self):
         x = tf.convert_to_tensor([[1.0, -1.0, -0.5], [0.1, -0.1, 0.5]],
                                  dtype=tf.float32)
-        y = optimizations.adjust_pct_gain(x, 1.1)
         want = [[1.0, -1.1, -0.55],
                 [0.1, -0.11, 0.5]]
-        self.assertNDArrayNear(y, want, 1e-4)
 
         log_x = tf.math.log(x / 100.0 + 1.0)
-        log_y = optimizations.adjust_log_gain(log_x, 1.1)
+        log_y = optimizations.adjusted_log_gains(log_x, 1.1)
         y = 100.0 * (tf.math.exp(log_y) - 1.0)
         self.assertNDArrayNear(y, want, 1e-4,
                                f'x=\n{x} \nlog_x=\n{log_x} \nlog_y=\n{log_y} \ny=\n{y} \nwant=\n{want}\n')
+
+        # Now try the version that works on percentage points.
+        y = optimizations.adjusted_pct_gains(x, 1.1)
+        self.assertNDArrayNear(y, want, 1e-4)
 
     def test_value_of_argmax_prev_value(self):
         x = tf.convert_to_tensor(

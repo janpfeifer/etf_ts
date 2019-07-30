@@ -9,33 +9,144 @@ import config
 import tf_lib
 
 
-def adjust_pct_gain(values: tf.Tensor, loss_cost: float) -> tf.Tensor:
-    """Adjusts negative pct gains by multiplying by loss_cost."""
-    ones = tf.ones_like(values)
-    return values * tf.where(values < 0.0, loss_cost * ones, ones)
+def mix_gain(logits: tf.Tensor, logits_mask: tf.Tensor, log_gains: tf.Tensor, loss_cost: float) -> Tuple[tf.Tensor, tf.Tensor]:
+    """Calculate the gains from the mix of assets given by the logits.
+
+    Args:
+        logits: Logits on how one wants to invest on. Shape is `[num_assets]`.
+        logits_mask: Which logits are in consideration. Shape is `[num_assets]`.
+        log_gains: Log gains reported for period, shape `[num_cycles, num_assets]`,
+          where typically `num_cycles` is the number of days, but they could
+          have been aggregated in larger periods. Gains should be set to 0
+          (that is, no change) for days/cycles when asset can't be negotiated.
+        loss_cost: Penalty assigned for losses.
+
+    Returns:
+        mix_gain: Scalar of total accumulated gain of mix, loss penalty not considered.
+            It is in the form of a ration with respect to the capital invested (so 1.5 
+            would mean a gain of 50% in the period)
+        adjusted_mix_gain: Scalar of total accumulated gain of mix,
+            adjusted by `loss_cost`.
+
+    """
+    weights = tf_lib.masked_softmax(logits, logits_mask)
+    # print(f'weights={weights}')
+    log_gains_cum = tf.cumsum(log_gains, axis=0, exclusive=True)
+    values = weights * tf.math.exp(log_gains_cum)
+    # print(f'values: shape={values.shape}, values=\n{values.numpy()}')
+    sum_values = tf.reduce_sum(values, axis=-1)
+    # print(f'sum_values: shape={sum_values.shape}, values={sum_values.numpy()}')
+    shifted_sum_values = tf.concat([[1.0], sum_values[:-1]], axis=0)
+    # print(f'shifted_sum_values: shape={shifted_sum_values.shape}, values={shifted_sum_values.numpy()}')
+    mix_gains = sum_values / shifted_sum_values - 1.0
+    # print(f'mix_gains: shape={mix_gains.shape}, values=\n{mix_gains.numpy()}')
+    loss_cost_on_gains = tf.where(
+        mix_gains > 0.0, 0.0, loss_cost * mix_gains - mix_gains)
+    # print(f'loss_cost_on_gains: shape={loss_cost_on_gains.shape}, values=\n{loss_cost_on_gains.numpy()}')
+
+    mix_gain = tf.reduce_sum(values[-1])
+    adjustment = tf.exp(tf.reduce_sum(tf.math.log(1.0 + loss_cost_on_gains)))
+    # print(f'adjustment={adjustment}')
+    adjusted_mix_gain = adjustment * mix_gain
+
+    return mix_gain, adjusted_mix_gain
 
 
-def adjust_log_gain(values: tf.Tensor, loss_cost: float) -> tf.Tensor:
-    """Adjusts negative log gains by summing by log(loss_cost)."""
-    ones = tf.ones_like(values)
-    zeros = tf.zeros_like(values)
+def optimize_mix(symbols: List[Text], logits_mask: tf.Tensor, log_gains: tf.Tensor,
+                 hparams: Dict[str, float]) -> Tuple[float, float, np.array, np.array]:
+    """Find mix that maximizes gains."""
+    assets_mix_logits = tf.Variable(
+        tf.zeros(dtype=tf.float32, shape=[len(symbols)]),
+        trainable=True)
 
-    # Calculate log gain assuming all are losses.
-    log_adjusted_gain = tf.math.log(
-        loss_cost * tf.math.exp(values) + (1.0 - loss_cost))
-    return tf.where(values < 0.0, log_adjusted_gain, values)
+    # Maximize adjusted_mixed_gains ...
+    loss_cost = float(hparams['loss_cost'])
+    learning_rate = hparams['learning_rate']
+    steps = int(hparams['steps'])
+    l1_l2_reg = tf.keras.regularizers.L1L2(l1=hparams['l1'], l2=hparams['l2'])
+
+    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+    for train_ii in range(steps):
+        with tf.GradientTape() as tape:
+            mix_gain_, adjusted_mix_gain = mix_gain(
+                assets_mix_logits, logits_mask, log_gains, loss_cost)
+            assets_mix = tf_lib.masked_softmax(assets_mix_logits, logits_mask)
+            loss = l1_l2_reg(assets_mix) - adjusted_mix_gain
+            trainable_vars = [assets_mix_logits]
+            grads = tape.gradient(loss, trainable_vars)
+            optimizer.apply_gradients(zip(grads, trainable_vars))
+            if train_ii % 100 == 0:
+                logging.info(f'Training: step={train_ii}, adjusted_mix_gain={adjusted_mix_gain:.4f}')
+
+    return (mix_gain_.numpy(), adjusted_mix_gain.numpy(), assets_mix_logits.numpy(), assets_mix.numpy())
 
 
-def total_gain_from_log_gains(values: tf.Tensor) -> tf.Tensor:
+def annualized_gain(gain: float, cycles: int) -> float:
+    """Convert gain to annualized gain.
+
+    Args:
+        gain: Multiplicative gain, so 1.5 for 50% gain, accumulated
+            over `cycles` trading days.
+        cycles: Number of cycles over which gain was calculated.
+
+    Returns:
+        Annualized (p.a.) gain, as a multiplicative facor.
+    """
+    ratio = float(config.YEARLY_PERIOD_IN_SERIAL) / float(cycles)
+    return math.exp(math.log(gain) * ratio)
+
+
+def adjusted_pct_gains(pct_gains: tf.Tensor, loss_cost: float) -> tf.Tensor:
+    """Adjusts negative pct gains by multiplying by loss_cost.
+
+    Args:
+        pct_gains: Gains in form of percentage points reported for period,
+            shape `[num_cycles, num_assets]`, where typically `num_cycles`
+            is the number of days, but they could have been aggregated in
+            larger periods. Gains should be set to 0 (that is, no change)
+            for days/cycles when asset can't be negotiated.
+        loss_cost: Penalty assigned for losses.
+    Returns:
+        adjusted_pct_gains: Tensor with same shape as pct_gains
+            `[num_cycles, num_assets]`, but with its negative values adjusted
+            for the loss_cost penalty.
+    """
+    ones = tf.ones_like(pct_gains)
+    return pct_gains * tf.where(pct_gains < 0.0, loss_cost * ones, ones)
+
+
+def adjusted_log_gains(log_gains: tf.Tensor, loss_cost: float) -> tf.Tensor:
+    """Adjusts negative log gains by summing by log(loss_cost).
+
+    Args:
+        log_gains: Log gains reported for period, shape `[num_cycles, num_assets]`,
+            where typically `num_cycles` is the number of days, but they could
+            have been aggregated in larger periods. Gains should be set to 0
+            (that is, no change) for days/cycles when asset can't be negotiated.
+        loss_cost: Penalty assigned for losses (a multiplier on the pct_gains,
+            applied on negative values only).
+    Returns:
+        adjusted_log_gains: Tensor with same shape as pct_gains
+            `[num_cycles, num_assets]`, but with its negative values adjusted
+            for the loss_cost penalty.
+    """
+    # Calculate adjusted log gain assuming all are losses.
+    adjusted = tf.math.log(loss_cost * (tf.math.exp(log_gains) - 1.0) + 1.0)
+
+    # Use adjusted values only when log_gain < 0.
+    return tf.where(log_gains < 0.0, adjusted, log_gains)
+
+
+def total_gain_from_log_gains(log_gains: tf.Tensor) -> tf.Tensor:
     """Sum log gains and take the exponetial."""
-    sum = tf.reduce_sum(values, axis=-1)
+    sum = tf.reduce_sum(log_gains, axis=0)
     return tf.math.exp(sum)
 
 
-def total_annualized_gain_from_log_gains(values: tf.Tensor) -> tf.Tensor:
-    """Returns annualized (p.a) gains, converted in %."""
-    years = values.shape[-1] / float(config.YEARLY_PERIOD_IN_SERIAL)
-    sum = tf.reduce_sum(values, axis=-1)
+def total_annualized_gain_from_log_gains(log_gains: tf.Tensor) -> tf.Tensor:
+    """Returns annualized (p.a) gains, converted into %."""
+    years = log_gains.shape[0] / float(config.YEARLY_PERIOD_IN_SERIAL)
+    sum = tf.reduce_sum(log_gains, axis=0)
     return 100.0 * tf.math.exp(sum / years) - 100.0
 
 
@@ -101,74 +212,3 @@ def greedy_selection_for_period(argmax: tf.Tensor, values: List[tf.Tensor], mask
     values = [tf_lib.partial_matrix_reduce_sum(value, period)
               for value in values]
     return value_of_argmax_prev_value(argmax, values, mask, transposed=True, default=0.0)
-
-
-def mix(logits, gains, mask, loss_cost):
-    """Calculate the gains from the mix of assets given by the logits."""
-    assets_mix_logits_tiled = tf.tile(
-        tf.expand_dims(logits, axis=0), [gains.shape[0], 1])
-    # print(f'    mask.shape={mask.shape}')
-    # print(f'    assets_mix_logits_tiled.shape={assets_mix_logits_tiled.shape}')
-    assets_mix = tf_lib.masked_softmax(assets_mix_logits_tiled, mask)
-    # print(f'    assets_mix=({assets_mix.shape})\n{assets_mix}\n')
-    mixed_gains = tf.math.log(tf.reduce_sum(
-        assets_mix * tf.math.exp(gains), axis=-1))
-    # print(f'    mixed_gains=({mixed_gains.shape})\n{mixed_gains}\n')
-    adjusted_mixed_gains = adjust_log_gain(mixed_gains, loss_cost)
-    # print(f'    adjusted_mixed_gains=({adjusted_mixed_gains.shape})\n{adjusted_mixed_gains}\n')
-    total = total_gain_from_log_gains(mixed_gains)
-    total_adjusted = total_gain_from_log_gains(adjusted_mixed_gains)
-    return mixed_gains, adjusted_mixed_gains, total, total_adjusted, assets_mix
-
-
-def optimize_mix(symbols: List[Text], gains: tf.Tensor, mask: tf.Tensor,
-                 hparams: Dict[str, float]) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor, tf.Tensor, np.array, np.array]:
-    """Find mix that maximizes gains."""
-    gains_t = tf.transpose(gains)  # shape=[serials, symbols]
-    mask_t = tf.transpose(mask)
-    assets_mix_logits = tf.Variable(
-        tf.zeros(dtype=tf.float32, shape=[len(symbols)]),
-        trainable=True)
-
-    # Maximize adjusted_mixed_gains ...
-    loss_cost = hparams['loss_cost']
-    learning_rate = hparams['learning_rate']
-    steps = int(hparams['steps'])
-    l1_l2_reg = tf.keras.regularizers.L1L2(l1=hparams['l1'], l2=hparams['l2'])
-
-    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-    for train_ii in range(steps):
-        with tf.GradientTape() as tape:
-            _, _, _, total_adjusted, _ = mix(
-                assets_mix_logits, gains_t, mask_t, loss_cost)
-            assets_mix = tf.nn.softmax(assets_mix_logits)
-            loss = l1_l2_reg(assets_mix) - total_adjusted
-            trainable_vars = [assets_mix_logits]
-            grads = tape.gradient(loss, trainable_vars)
-            # print(f'    dtotal_dlogits={dtotal_dlogits}')
-            optimizer.apply_gradients(zip(grads, trainable_vars))
-            # assets_mix_logits.assign_sub(dtotal_dlogits * learning_rate)
-            if train_ii % 100 == 0:
-                logging.info(f'Training: step={train_ii}, total_adjusted={total_adjusted:.4f}')
-
-    mixed_gains, adjusted_mixed_gains, total, total_adjusted, assets_mix = mix(
-        assets_mix_logits, gains_t, mask_t, loss_cost)
-    return (mixed_gains, adjusted_mixed_gains, total, total_adjusted, assets_mix_logits.numpy(), assets_mix.numpy())
-
-    # print(f'*** total={total:.4f}, total_adjusted={total_adjusted:.4f},\n' +
-    #       f'    assets_mix: logits={assets_mix_logits.numpy()} last={assets_mix[-1]}\n')
-    # for ii in range(10):
-    #     rows = config.YEARLY_PERIOD_IN_SERIAL * (ii + 1)
-    #     last_year_gains = mixed_gains[-rows:]
-    #     last_year_gains = total_gain_from_log_gains(last_year_gains)
-    #     last_year_adjusted_gains = adjusted_mixed_gains[-rows:]
-    #     last_year_adjusted_gains = total_gain_from_log_gains(
-    #         last_year_adjusted_gains)
-    #     last_year_assets_mix = assets_mix[-rows].numpy()
-    #     np.set_printoptions(precision=4, linewidth=120, threshold=100)
-    #     print(f'    last {ii+1} year(s): total={last_year_gains:.4f}, total_adjusted={last_year_adjusted_gains:.4f}\n' +
-    #           f'                         mix={last_year_assets_mix}')
-
-    #     np.set_printoptions(precision=4, linewidth=120, threshold=100)
-    #     print(f'    last {ii+1} year(s): total={last_year_gains:.4f}, total_adjusted={last_year_adjusted_gains:.4f}\n' +
-    #           f'                         mix={last_year_assets_mix}')
