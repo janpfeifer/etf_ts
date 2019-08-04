@@ -6,6 +6,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+# Sources:
+#
+# finance.google.com
+# etfdb.com
+# vanguard.com
+#
 
 TICKERS = [
     'BIV', 'BLV', 'BND', 'BNDW', 'BNDX',
@@ -36,8 +42,6 @@ TICKERS = [
     'VUG', 'VV', 'VWO',
     'VWOB', 'VXF', 'VXUS', 'VYM', 'VYMI',
 
-    #
-
     # Indices
     'VNRT.L',  # FTSE North America UCITS ETF (USD) Distributing (VNRT)
     'VUSA.L',  # S&P 500 UCITS ETF (USD) Tracks the performance of the S&P 500.
@@ -45,6 +49,7 @@ TICKERS = [
 
     # Mixes
     'GSLC',  # ActiveBeta U.S. Large Cap Equity ETF
+    'AIEQ',  # AI Powered Equity ETF, https://etfmg.com/funds/aieq/
 
     # Bonds.
     'EDV',  # Vanguard Extended Duration Treasury ETF -> US extended bonds.
