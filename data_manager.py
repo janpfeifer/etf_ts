@@ -4,7 +4,7 @@ import datetime
 import os
 import pandas as pd
 import requests
-from typing import Dict
+from typing import Dict, Optional, Text
 import urllib
 from yahoofinancials import YahooFinancials
 
@@ -54,7 +54,7 @@ class DataManager:
     response = requests.get(url)
     return response.text
 
-  def _DownloadPricesCSVFromYahooFinance(self, symbol: str) -> str:
+  def _DownloadPricesCSVFromYahooFinance(self, symbol: str) -> Text:
     asset = YahooFinancials(symbol)
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     historical_data = asset.get_historical_price_data(
@@ -71,11 +71,13 @@ class DataManager:
     csv_data = "\n".join(lines)
     return csv_data
 
-  def _DownloadDividendsCSVFromYahooFinance(self, symbol: str) -> str:
+  def _DownloadDividendsCSVFromYahooFinance(self, symbol: str) -> Optional[Text]:
     asset = YahooFinancials(symbol)
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     dividends = asset.get_daily_dividend_data(
         start_date=config.DEFAULT_MIN_DATE, end_date=today)[symbol]
+    if dividends is None:
+      return None
     lines = ['Date,Amount']  # Header
     for e in dividends:
       if e['amount'] is None:
@@ -101,8 +103,9 @@ class DataManager:
 
     # Dividends.
     csv_data = self._DownloadDividendsCSVFromYahooFinance(symbol)
-    with open(p + '/dividends.csv', 'w') as f:
-      f.write(csv_data)
+    if csv_data is not None:
+      with open(p + '/dividends.csv', 'w') as f:
+        f.write(csv_data)
 
     with open(p + '/timestamp.txt', 'w') as f:
       f.write('{}'.format(datetime.datetime.now()))
@@ -123,7 +126,10 @@ class DataManager:
     if 'Date' not in df or len(df['Date']) == 0:
       raise ValueError(f'Failed to load data for {symbol}')
     self._data[symbol] = df
-    dividends = pd.read_csv(p + '/dividends.csv')
+    if os.path.isfile(p + '/dividends.csv'):
+      dividends = pd.read_csv(p + '/dividends.csv')
+    else:
+      dividends = None
     self._dividends[symbol] = dividends
 
   def SaveData(self, symbol: str) -> None:

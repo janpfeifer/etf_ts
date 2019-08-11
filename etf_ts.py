@@ -50,6 +50,9 @@ flags.DEFINE_bool(
 flags.DEFINE_float(
     'loss_cost', 1.1,
     'Relative cost of losses compared to gain: the larger this number the larger the penalty for volatility.')
+flags.DEFINE_float(
+    'tax_on_dividends', asset_measures.TAX_ON_DIVIDENDS_PERCENTAGE,
+    'Percentage of dividends (0 to 1.0) loss due to taxes.')
 flags.DEFINE_list(
     'stats', 'per_asset,greedy,average,mix,selection',
     'List of stats to output. A selection of: per_asset, etc.'
@@ -57,6 +60,7 @@ flags.DEFINE_list(
 flags.DEFINE_integer('mix_steps', 300,
                      'Number of steps to optimize each period in mixed strategy.')
 flags.mark_flag_as_required('data')
+
 
 flags.DEFINE_float(
     'mix_training_period', 2.0,
@@ -71,6 +75,8 @@ def main(argv):
     del argv  # Unused.
 
     tf_lib.config_gpu()
+
+    asset_measures.TAX_ON_DIVIDENDS_PERCENTAGE = FLAGS.tax_on_dividends
 
     # Select and sort symbols.
     symbols = FLAGS.symbols
