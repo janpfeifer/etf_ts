@@ -18,10 +18,11 @@ TICKERS = [
 
     #================================================================================================
     # Indices
-    'VNRT.L',  # FTSE North America UCITS ETF (USD) Distributing (VNRT)
-    'VUSA.L',  # S&P 500 UCITS ETF (USD) Tracks the performance of the S&P 500.
     'BNDW',    # Vanguard Total World Bond ETF, tracks the performance of the Bloomberg Barclays Global Aggregate Float Adjusted Composite Index
+    'VNRT.L',  # FTSE North America UCITS ETF (USD) Distributing (VNRT)
+    'VOOG',  # Vanguard ADMIRA/S&P 500 GR IX FD ET
     'VOOV',  # Vanguard S&P 500 Value ETF
+    'VUSA.L',  # S&P 500 UCITS ETF (USD) Tracks the performance of the S&P 500.
 
     #================================================================================================
     # Vanguard Retirement Funds
@@ -65,6 +66,7 @@ TICKERS = [
     'VOT',  # Vanguard Mid-Cap Growth ETF (VOT)
     'VOE',  # VANGUARD IX FUN/VANGUARD MID-CAP VA
     'AIEQ',  # AI Powered Equity ETF, https://etfmg.com/funds/aieq/
+    'XLF',  # Financial Select Sector SPDR Fund
 
     #================================================================================================
     # Strategic metals, materials and water.
@@ -82,6 +84,7 @@ TICKERS = [
 
     #================================================================================================
     # Bonds
+    'BLV',  # Vanguard Long-Term Bond ETF.
     'EDV',  # Vanguard Extended Duration Treasury ETF -> US extended bonds.
     'IEF',   # iShares 7-10 Year Treasury Bond ETF
     'TLT',   # iShares 20+ Year Treasury Bond ETF
@@ -107,6 +110,7 @@ TICKERS = [
     'CLOU',  # Global X Cloud Computing ETF
     'XSW',   # SPDR S&P Software & Services ETF
     'GAMR',  # ETFMG Video Game Tech ETF
+    'VOX',  # Vanguard Telecommunication Services ETF
 
     #================================================================================================
     # Health
@@ -118,12 +122,12 @@ TICKERS = [
 
     #================================================================================================
     # Utilities
-    'VPU',   # Vanguard Utilities Index Fund ETF Shares
+    'VPU',  # Vanguard Utilities Index Fund ETF Shares
     # 'AWTAX',  # AllianzGI Global Water Fund A (AWTAX)
 
     #================================================================================================
     # Not yet classified.
-    'BIV', 'BLV', 'BND', 'BNDW', 'BNDX',
+    'BIV', 'BND', 'BNDW', 'BNDX',
     'BSV', 'IVOG', 'IVOO',
     'IVOV', 'MGC', 'MGK', 'MGV', 'VAW',
     'VB', 'VBK', 'VBR', 'VCIT', 'VCLT',
@@ -138,8 +142,6 @@ TICKERS = [
     'VONG',
     'VONV',
     'VOO',
-    'VOOG',
-    'VOX',
     'VPL',
     'VSS',
     'VT',
