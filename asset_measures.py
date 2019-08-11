@@ -6,7 +6,6 @@
 # along with the downloaded original data.
 
 from absl import logging
-
 import math
 import numpy as np
 import pandas as pd
@@ -21,7 +20,8 @@ import config
 MAX_WINDOW_SIZE = 21
 
 # Last value calculated, used to check if derived values are present.
-_LAST_DERIVED_VALUE_CALCULATED = 'PctDailyGainVol'
+#_LAST_DERIVED_VALUE_CALCULATED = 'PctDailyGainVol'
+_LAST_DERIVED_VALUE_CALCULATED = 'Dividends'
 
 
 def SerialDateToString(srl_no: int) -> str:
@@ -47,9 +47,35 @@ def _trim_before_serial(df: pd.DataFrame, min_serial: int) -> pd.DataFrame:
     return df
 
 
-def AddDerivedValues(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
+def _merge_dividends(df: pd.DataFrame, dividends: pd.DataFrame, symbol: str) -> pd.DataFrame:
+    dividends = dividends.drop(columns='Date')
+    dividends = dividends.rename(columns={'Amount': 'Dividends'})
+    df = pd.merge(df, dividends, on='Serial', how='outer')
+    if df['Close'].isna().any():
+        raise ValueError(f'Asset {symbol} has divident paid on day without an Open value.')
+    df['Dividends'] = np.where(df['Dividends'].isna(), 0.0, df['Dividends'])
+    dividends = df['Dividends']
+    spread = np.zeros_like(dividends, dtype=np.float)
+    for idx in range(dividends.size):
+        if dividends[idx] > 0.0:
+            fraction = float(dividends[idx]) / float(config.SPREAD_DIVIDENDS)
+            spread[min(0, idx - config.SPREAD_DIVIDENDS + 1)
+                       :idx + 1] += fraction
+            if idx > dividends.size - config.SPREAD_DIVIDENDS:
+                # Assume similar dividends will be paid next cycle: likely a better
+                # assumption than no dividend will be paid.
+                spread[idx + 1:] += fraction
+    df['SpreadDividends'] = spread
+    return df
+
+
+def AddDerivedValues(df: pd.DataFrame, dividends: pd.DataFrame, symbol: str) -> pd.DataFrame:
     """Add some standard derived values to dataframe."""
     df['Serial'] = df['Date'].apply(StringDateToSerial)
+    dividends['Serial'] = dividends['Date'].apply(StringDateToSerial)
+    df = _merge_dividends(df, dividends, symbol)
+
+    # Fix broken / missing dates anda data.
     if symbol in config.FIX_MIN_DATE:
         min_serial = StringDateToSerial(config.FIX_MIN_DATE[symbol])
         df = _trim_before_serial(df, min_serial)

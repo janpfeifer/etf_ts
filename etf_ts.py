@@ -88,7 +88,7 @@ def main(argv):
         if not asset_measures.HasDerivedValues(dmgr.data[symbol]) or FLAGS.force_recalc:
             logging.info(f'Calculating derived values for {symbol}')
             dmgr.data[symbol] = asset_measures.AddDerivedValues(
-                dmgr.data[symbol], symbol)
+                dmgr.data[symbol], dmgr.dividends[symbol], symbol)
             dmgr.SaveData(symbol)
 
     # Calculate dense ordered arrays.

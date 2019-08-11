@@ -9,10 +9,11 @@ from __future__ import print_function
 # Sources:
 #
 # finance.google.com
+# finance.yahoo.com
 # etfdb.com
 # vanguard.com
 #
-
+# List of exchange: https://www.google.com/googlefinance/disclaimer/
 TICKERS = [
     'BIV', 'BLV', 'BND', 'BNDW', 'BNDX',
     'BSV', 'IVOG', 'IVOO',
@@ -46,6 +47,10 @@ TICKERS = [
     'VNRT.L',  # FTSE North America UCITS ETF (USD) Distributing (VNRT)
     'VUSA.L',  # S&P 500 UCITS ETF (USD) Tracks the performance of the S&P 500.
     'BNDW',    # Vanguard Total World Bond ETF, tracks the performance of the Bloomberg Barclays Global Aggregate Float Adjusted Composite Index
+    # Aka SWX:CSSMIM, iShares SMIM® ETF (CH), The Fund seeks to track
+    # the performance of an index composed of the 30 largest Swiss companies
+    # not included in the SMI index
+    'CSSMIM.SW',
 
     # Mixes
     'GSLC',  # ActiveBeta U.S. Large Cap Equity ETF
@@ -56,14 +61,15 @@ TICKERS = [
 
     # Strategic metals, materials and water.
     'REMX',  # The VanEck Vectors Rare Earth/Strategic Metals
-    # 'PALL',  # The ETFS Physical Palladium Shares -> Equivalent to PHPD.L
+    'PALL',  # The ETFS Physical Palladium Shares -> Equivalent to PHPD.L
+    'PHPD.L',  # Palladium ETFS PHPD INAV -> Equivalent to PALL
+    'JJN',    # Nickel based ETF.
     'PICK',  # The iShares MSCI Global Select Metals & Mining Producers ETF
-    'XME',   # SPDR S&P Metals and Mining
+    'XME',   # SPDR S&P Metals and Mining, dividend based.
     # 'GLD',   # The SPDR Gold Trust (GLD) -> Equivalent to SGLD.L
     # 'SGOL',  # Aberdeen Standard Investments Physical Swiss Gold Shares421.5440 ETF -> SGLD.L equivalent
     #'ZGLD',  # ZKB Gold ETF AA CHF Klasse (SWX)
     #'ZPAL',  # ZKB ZKB Palladium ETF (SWX)
-    'PHPD.L',  # Palladium ETFS PHPD INAV -> Equivalent to PALL
     'SGLD.L',  # SRC PH/ASST BKD 21001231 SER -> SGOL equivalent
 
     # Bonds
@@ -92,9 +98,21 @@ TICKERS = [
 
     # Utilities
     'VPU',   # Vanguard Utilities Index Fund ETF Shares
+
 ]
 
-# Trim data for some assets that have broken data. For each symbo defines the
+# Tickers whose hystorical data are to be read from Yahoo Finance.
+TICKERS_FROM_YAHOO_FINANCE = set([
+    # Aka SWX:CSSMIM, iShares SMIM® ETF (CH), The Fund seeks to track
+    # the performance of an index composed of the 30 largest Swiss companies
+    # not included in the SMI index
+    'CSSMIM.SW',
+])
+
+# Default starting of historical data.
+DEFAULT_MIN_DATE = '2006-01-01'
+
+# Trim data for some assets that have broken data. For each symbol defines the
 # minimum start date to consider.
 FIX_MIN_DATE = {
     'VIG': '2006-01-01',
@@ -135,6 +153,9 @@ MONTHLY_PERIOD_IN_SERIAL = 17
 
 # A year is roughly wequivalent to 240 "days" (serial counts)
 YEARLY_PERIOD_IN_SERIAL = 257
+
+# Spread dividend award across the previous days.
+SPREAD_DIVIDENDS = 1 * YEARLY_PERIOD_IN_SERIAL
 
 # Symbols not available in WorldTradeData:
 # 'ESGV', 'VLFQ', 'VFMF', 'VSGX', 'VFQY', 'VFMO',
