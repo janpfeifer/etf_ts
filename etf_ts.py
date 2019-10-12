@@ -29,6 +29,7 @@ from typing import Dict, List, Text, Tuple
 
 import asset_measures
 import config
+import config_ib
 import data_manager
 import dense_measures
 import optimizations
@@ -77,6 +78,10 @@ def main(argv):
     tf_lib.config_gpu()
 
     asset_measures.TAX_ON_DIVIDENDS_PERCENTAGE = FLAGS.tax_on_dividends
+
+    # symbols = config_ib.extract_ib_symbols(FLAGS.data)
+    # print(symbols)
+    # return
 
     # Select and sort symbols.
     symbols = FLAGS.symbols
