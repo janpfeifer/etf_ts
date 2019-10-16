@@ -156,7 +156,7 @@ def VolatilitySubRange(values: np.array, weights: np.array) -> Tuple[float, floa
     """Return weighted percentual volatility for a range and mean."""
     weights_sum = weights.sum()
     if weights_sum <= 0:
-        weights_sum = 0.0
+        weights_sum = 1.0
     mean = (values * weights).sum() / weights_sum
     sq_values_diff = (values - mean)**2
     std = math.sqrt((sq_values_diff * weights).sum() / weights_sum)

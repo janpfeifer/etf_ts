@@ -45,6 +45,8 @@ flags.DEFINE_integer('max_age_days', 10,
 flags.DEFINE_list(
     'symbols', None,
     'List of sBase path where to store historical marked data. Can be shared across models')
+flags.DEFINE_integer('symbols_max_count', 0,
+                     'Used for testing. If >0 take the first --symbols_max_count symbols only.')
 flags.DEFINE_bool(
     'force_recalc', False,
     'If true forces recalculation of derived values.')
@@ -79,25 +81,23 @@ def main(argv):
 
     asset_measures.TAX_ON_DIVIDENDS_PERCENTAGE = FLAGS.tax_on_dividends
 
-    # symbols = config_ib.extract_ib_symbols(FLAGS.data)
-    # print(symbols)
-    # return
-
     # Select and sort symbols.
     symbols = FLAGS.symbols
     if symbols is None:
-        symbols = config.TICKERS
-    symbols = sorted(symbols)
+        symbols = config_ib.extract_ib_symbols(FLAGS.data, FLAGS.max_age_days)
+    if FLAGS.symbols_max_count > 0:
+        symbols = symbols[:FLAGS.symbols_max_count]
 
     # Download data or reload it from disk cache.
     dmgr = data_manager.DataManager(FLAGS.data)
-    for symbol in symbols:
-        dmgr.DownloadRawData(symbol, max_age_days=FLAGS.max_age_days)
+    symbols = dmgr.DownloadRawDataForList(
+        symbols, max_age_days=FLAGS.max_age_days)
 
     # Calculate independent (from each other) derived information if not loaded from cache.
-    for symbol in symbols:
+    num_symbols = len(symbols)
+    for ii, symbol in enumerate(symbols):
         if not asset_measures.HasDerivedValues(dmgr.data[symbol]) or FLAGS.force_recalc:
-            logging.info(f'Calculating derived values for {symbol}')
+            logging.info(f'Calculating derived values for {symbol} ({num_symbols - ii} missing)')
             dmgr.data[symbol] = asset_measures.AddDerivedValues(
                 dmgr.data[symbol], dmgr.dividends[symbol], symbol)
             dmgr.SaveData(symbol)
@@ -139,6 +139,7 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
     adjusted_log_gains = fields['AdjustedLogDailyGain']
     log_gains = log_gains[-config.REPORT_PERIOD:, :]
     adjusted_log_gains = adjusted_log_gains[-config.REPORT_PERIOD:, :]
+    print(adjusted_log_gains)
     total_gain = optimizations.total_annualized_gain_from_log_gains(log_gains)
     total_adjusted_gain = optimizations.total_annualized_gain_from_log_gains(
         adjusted_log_gains)
