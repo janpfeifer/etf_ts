@@ -62,13 +62,18 @@ def _merge_dividends(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
     if 'Dividends' in df:
         df = df.drop(columns='Dividends')
     merged_df = pd.merge(df, dividends, on='Serial', how='outer')
+
     if merged_df['Close'].isna().any():
         # Move date of dividends to the previous market day.
-        logging.info(f'Asset {symbol} has dividend paid on day without an Open value.')
+        logging.info(f'Asset {symbol} has dividend paid on day without an Open value, then the merge is slower.')
         valid_serials = set(df['Serial'].tolist())
-        for idx in range(dividends['Serial'].size):
-            serial = dividends['Serial'][idx]
-            if serial not in valid_serials:
+        new_dividends = []
+        for _, row in dividends.iterrows():
+            serial = row['Serial']
+            amount = row['Dividends']
+            if serial in valid_serials:
+                new_dividends.append({'Serial': serial, 'Dividends': amount})
+            else:
                 # Search for a replacind serial for up to a month before.
                 date = SerialDateToString(int(serial))
                 new_serial = -1
@@ -76,12 +81,19 @@ def _merge_dividends(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
                     new_serial = int(serial - ii - 1)
                     new_date = SerialDateToString(new_serial)
                     if new_serial in valid_serials:
-                        dividends['Serial'][idx] = new_serial
+                        new_dividends.append(
+                            {'Serial': new_serial, 'Dividends': amount})
                         logging.info(f'Missing marked for dividend on {date} (serial={serial}), moved to {new_date} instead')
                         break
                 if new_serial == -1:
                     raise ValueError(f'Missing marked for dividend on {date} (serial={serial}), no alternative date found.')
-        merged_df = pd.merge(df, dividends, on='Serial', how='outer')
+        if new_dividends:
+            dividends = pd.DataFrame(new_dividends)
+            merged_df = pd.merge(df, dividends, on='Serial', how='outer')
+        else:
+            df['Dividends'] = np.zeros_like(df['Close'], dtype=np.float)
+            df['SpreadDividends'] = np.zeros_like(df['Close'], dtype=np.float)
+            return df
 
     # Spread
     df = merged_df
@@ -91,7 +103,7 @@ def _merge_dividends(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
     for idx in range(dividends.size):
         if dividends[idx] > 0.0:
             fraction = float(dividends[idx]) / float(config.SPREAD_DIVIDENDS)
-            spread[min(0, idx - config.SPREAD_DIVIDENDS + 1)                   :idx + 1] += fraction
+            spread[min(0, idx - config.SPREAD_DIVIDENDS + 1)                   : idx + 1] += fraction
             if idx > dividends.size - config.SPREAD_DIVIDENDS:
                 # Assume similar dividends will be paid next cycle: likely a better
                 # assumption than no dividend will be paid.
@@ -120,7 +132,7 @@ def AddDerivedValues(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
     df['MidHighLow'] = (df['High'] + df['Low']) / 2.0
     df['DiffHighLow'] = df['High'] - df['Low']
     df['DiffHighLowPct'] = (100.0 * df['DiffHighLow'] / df['High']).apply(
-        lambda x: min(x, 20.0))
+        lambda x: 0.0 if math.isnan(x) else min(x, 20.0))
     _open = df['Open'].values
     close = df['Close'].values
     next_open = np.roll(_open, -1)
@@ -134,7 +146,6 @@ def AddDerivedValues(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
     df['PctDailyGain'] = 100.0 * daily_gain / _open
     df['LogDailyGain'] = np.log((_open + daily_gain) / _open)
     df['DeltaSerial'] = df['Serial'] - df['Serial'].shift(+1)
-
     MeanValue(df, 'Volume')
 
     # Add volatility metrics.
@@ -166,6 +177,8 @@ def VolatilitySubRange(values: np.array, weights: np.array) -> Tuple[float, floa
 def PctVolatilitySubRange(values: np.array, weights: np.array) -> float:
     """Return weighted percentual volatility for a range in percentage of mean."""
     std, mean = VolatilitySubRange(values, weights)
+    if mean <= 0:
+        return 0.0
     return 100.0 * std / mean
 
 
@@ -178,7 +191,8 @@ def PctVolatility(df: pd.DataFrame, field: str ='Close', weight_field: str ='Vol
     The volatility is normalized by the mean, and multiplied by 100 to give
     the "percentual volatility".
 
-    See details in https://en.wikipedia.org/wiki/Weighted_arithmetic_mean#Weighted_sample_variance
+    # Weighted_sample_variance
+    See details in https://en.wikipedia.org/wiki/Weighted_arithmetic_mean
     """
     values = df[field]
     weights = df[weight_field]

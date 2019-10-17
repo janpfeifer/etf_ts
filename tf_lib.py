@@ -1,5 +1,6 @@
 # tf_lib holds tensorflow related "plumbing" utility functions.
 
+from absl import logging
 import numpy as np
 import tensorflow as tf
 
@@ -17,11 +18,10 @@ def config_gpu():
             for gpu in gpus:
                 tf.config.experimental.set_memory_growth(gpu, True)
             logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-            print(len(gpus), "Physical GPUs,", len(
-                logical_gpus), "Logical GPUs")
+            logging.info(f'{len(gpus)} Physical GPUs, {len(logical_gpus)} Logical GPUs')
         except RuntimeError as e:
             # Memory growth must be set before GPUs have been initialized
-            print(e)
+            logging.info(e)
 
 
 def masked_reduce_max(t: tf.Tensor, mask: tf.Tensor, default: float,

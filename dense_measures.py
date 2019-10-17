@@ -49,7 +49,23 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
     """
     logging.info('Generating dense matrices.')
 
+    # Check for nans
+    logging.info('  - checking for NaNs.')
+    has_nans = False
+    for symbol in ordered_symbols:
+        df = dmgr.data[symbol]
+        for field in config.FIELDS_FOR_TENSORFLOW:
+            values = df[field].values[asset_measures.MAX_WINDOW_SIZE:]
+            if FLAGS.max_days is not None:
+                values = values[-FLAGS.max_days:]
+            if np.any(np.isnan(values)):
+                logging.info(f'Found nan in asset {symbol}, field {field}, in rows {np.where(np.isnan(df[field].values))}')
+                has_nans = True
+    if has_nans:
+        raise ValueError('Nan values in assets information.')
+
     # Finds number of rows needed: the number of individual serial numbers.
+    logging.info('  - find all date serial numbers we have information.')
     first_serial = asset_measures.StringDateToSerial(config.START_DATE)
     serials_set = set()  # type: Set[int]
     for symbol in ordered_symbols:
@@ -64,6 +80,8 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
         all_serials = all_serials[-FLAGS.max_days:]
 
     # Initalizes matrices with zeros.
+    logging.info(
+        '  - zero initialize arrays for fields {}'.format(', '.join(config.FIELDS_FOR_TENSORFLOW)))
     rows = len(all_serials)
     columns = len(ordered_symbols)
     field_to_ndarray = {
@@ -72,8 +90,17 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
     mask = np.zeros(shape=[rows, columns], dtype=bool)
 
     # Loop sequentially over serial numbers.
+    logging.info(
+        '  - loop over serials vs find all date serial numbers we have information.')
     current_indices = [0 for symbol in ordered_symbols]
+    print_count = 10
+    total_count = len(all_serials)
     for serial_idx, serial in enumerate(all_serials):
+        if serial_idx > 0 and serial_idx % print_count == 0:
+            logging.info(f'    done {serial_idx} out of {total_count}')
+            if print_count * 10 < total_count:
+                print_count *= 10
+
         active_symbols = _FindActive(
             dmgr, ordered_symbols, serial, current_indices)
         if not len(active_symbols):
@@ -85,6 +112,7 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
             for field in config.FIELDS_FOR_TENSORFLOW:
                 field_to_ndarray[field][serial_idx,
                                         symbol_idx] = df[field][current_indices[symbol_idx]]
+
     return field_to_ndarray, mask, all_serials
 
 

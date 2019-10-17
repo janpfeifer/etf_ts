@@ -82,11 +82,9 @@ def main(argv):
     asset_measures.TAX_ON_DIVIDENDS_PERCENTAGE = FLAGS.tax_on_dividends
 
     # Select and sort symbols.
-    symbols = FLAGS.symbols
-    if symbols is None:
-        symbols = config_ib.extract_ib_symbols(FLAGS.data, FLAGS.max_age_days)
-    if FLAGS.symbols_max_count > 0:
-        symbols = symbols[:FLAGS.symbols_max_count]
+    symbols = config_ib.extract_ib_symbols(FLAGS.data, FLAGS.max_age_days)
+    if FLAGS.symbols is not None:
+	    symbols = FLAGS.symbols
 
     # Download data or reload it from disk cache.
     dmgr = data_manager.DataManager(FLAGS.data)
@@ -139,19 +137,25 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
     adjusted_log_gains = fields['AdjustedLogDailyGain']
     log_gains = log_gains[-config.REPORT_PERIOD:, :]
     adjusted_log_gains = adjusted_log_gains[-config.REPORT_PERIOD:, :]
-    print(adjusted_log_gains)
+
     total_gain = optimizations.total_annualized_gain_from_log_gains(log_gains)
     total_adjusted_gain = optimizations.total_annualized_gain_from_log_gains(
         adjusted_log_gains)
+    if tf.reduce_any(tf.math.is_nan(total_gain)) or tf.reduce_any(tf.math.is_nan(total_adjusted_gain)):
+	    logging.info(f'nan in log_gains: {tf.where(tf.math.is_nan(log_gains))}')
+	    logging.info(f'nan in adjusted: {tf.where(tf.math.is_nan(adjusted_log_gains))}')
+	    logging.info('You probably want to remove those symbols with noisy data. '
+	    	'Run with stats=per_asset, redirect to a file and grep for nan.')
 
     # Print it out.
     for symbol_idx, symbol in enumerate(symbols):
         gain = total_gain[symbol_idx]
+        description = config_ib.SYMBOL_TO_INFO[symbol]['description']
         adjusted_gain = total_adjusted_gain[symbol_idx]
 
         initial_value = initial_values[symbol_idx]
         final_value = final_values[symbol_idx]
-        print(f'{symbol},{gain:.4f},{adjusted_gain:.4f},{initial_value:.2f},{final_value:.2f}')
+        print(f'{symbol},{gain:.4f},{adjusted_gain:.4f},{initial_value:.2f},{final_value:.2f},{description}')
 
 
 def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:

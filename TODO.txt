@@ -6,3 +6,6 @@
 
 ...
 * Predict best mix for next month/year.
+
+* per_asset: list how many days were used.
+* interest/dividens: not to spread, account as gains in the day they are given.

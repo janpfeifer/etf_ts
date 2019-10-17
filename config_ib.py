@@ -40,55 +40,54 @@ INTERACTIVE_BROKERS_SOURCES = [
 
 CURRENCIES = ['GBP', 'CHF', 'USD', 'EUR', 'JPY']
 
-SKIP_SYMBOLS = set([
-    # Missing from Yahoo
-    'CE8.SW', 'BBIL.SW', 'CI2.SW', 'TCMCI.SW', 'T3GB.SW', 'TAGCI.SW', 'JPGL.SW', 'CC1.SW',
-    'WGOV.SW', '500.SW', 'CNYB.SW', 'EYLD.SW', 'CWE.SW', 'I.SW', 'CW8.SW', 'GOVE.SW', 'TRRCI.SW',
-    'ESGGB.SW', 'CHSRIA.SW', 'CE9.SW', 'CWF.SW', 'CBM.SW', 'TCNCI.SW', 'TWWCI.SW', 'USDE.SW',
-    'TRGB.SW', 'A.SW', 'TLPCI.SW', 'WYLD.SW', 'OIL2S.SW', 'EMHE.SW', 'DBXI.SW', 'CU2.SW', 'CSW.SW',
-
-    'HPRD.SW', 'XAIX.SW', 'UCAP.SW', 'WCOG.SW', 'VLUD.SW', 'LYRUD.SW', 'RQFI.SW', 'XG7S.SW', 
-    'HODL.SW', 'XIEE.SW', 'XGII.SW', 'CAPU.SW', 'SP500F.SW', 'SHEMG.SW', 'SPXD.SW', 'ICHN.SW', 
-    'EMLOC.SW', 'SWRD.SW', 'CBUSAC.SW',
-
-    '0MTJ.L', '020Y.L', '0FLE.L', '0GGH.L', 'GLAD.L', '0H1I.L', 'OWLP.L', 'A.L', '0W6Q.L', 'PRCU.L',
-    'LOUF.L', '0MT6.L', 'IQSA.L', 'T3GB.L', 'SYB3.L', 'FEME.L', 'FEUI.L', '0MUL.L', 'IEMU.L', 'S.L',
-    '0MTG.L', 'F.L',
-
-    '0Y7Z.L', '0W7A.L', 'ULV2.L', '0E0Y.L', '0HC6.L', '0W7N.L', '0Y22.L', '0H71.L', '0H80.L',
-    '0JRY.L', '0MUX.L', '0W7I.L', '0H82.L', '0Y49.L', 'CLMU.L', '0HCD.L', '0H7Q.L', '0ANL.L',
-    '0H6R.L', '0HCS.L', '0H7L.L', '0Y7Q.L', '0ANU.L', '0E1M.L', '0HDN.L', '0JGK.L', '0MUR.L',
-    '0GP0.L', '0W7K.L', '0Y7H.L', '0H8Y.L', '0L12.L', '0LOE.L', '0MVS.L', 'OAUH.L', '0IAS.L',
-    '0I9M.L', '0H9C.L', '0Y8Z.L', '0H6V.L', '0W7X.L', '0DKR.L', 'L.L', '0H70.L', '0KQK.L', '0L13.L',
-    '0YEB.L', '0HBV.L', '0Y6W.L', '0XE0.L', '0Y0J.L', '0AO7.L', 'GOOE.L', '0H6Z.L', 'MSRG.L',
-    '0KR4.L', '0H9I.L', '0HAX.L', 'GS2E.L', 'FIND.L', '0Y7I.L', 'RDS2.L', '0Y8I.L', '0H97.L',
-    '0H7Y.L', '0LNF.L', '0Y2M.L', '0W3K.L', 'CITE.L', '0LLL.L', 'CRME.L', '0H78.L', '0ANK.L',
-    '0MOL.L', 'V.L', '0H77.L', '0IAW.L', 'ESRG.L', '0HFU.L', '0MWL.L', '0HCP.L', '0MJI.L',
-    '0RSJ.L', 'SBD1.L', 'JP2E.L', '0H6U.L', '0H8Z.L', '0H6S.L', '0HFX.L', '0YWV.L', '0HD7.L',
-    '0H72.L', 'O8PS.L', '0ANW.L', 'TREG.L', '0Y1X.L', '0ANP.L', 'TNAE.L', '0HB3.L', '0H6P.L',
-    '0Y2D.L', '0W76.L', '0HDC.L', '0Y4G.L', '0VR9.L', '0ANI.L', '0HDW.L', '0H6Q.L', '0HEX.L',
-    '0H8Q.L', '0Y37.L', '0W7Z.L', '0Y7R.L', '0Y7J.L', '0HA2.L', '0HD1.L', '0LO7.L', 'AZN2.L',
-    'OSPI.L', '0I9S.L', '0HAP.L', '0Y4N.L', '0HFZ.L', '0H7T.L', '0HDM.L', '0HE0.L', 'VISE.L',
-    '0HDB.L', '0HES.L', 'X.L', '0E7Q.L', 'VJPA.L', '0H74.L', '0H7N.L', '0HCU.L', 'MIST.L',
-    'ENL2.L', '0HA7.L', '0IX4.L', '0FBL.L', '0H8W.L', '0MJQ.L', '0MPZ.L', '0H76.L', '0ANS.L',
-    'TVOL.L', '0H7K.L', '0HBG.L', 'TNGB.L', '0Y43.L', '0ANH.L', '0Y7G.L', '0HBL.L', '0HCJ.L',
-    '0Y2F.L', '0JH7.L', '0W77.L', '0JKD.L', '0HCF.L', '0JLR.L', 'VOD2.L', '0HCY.L', '0HDZ.L',
-    '0GOZ.L', 'MSRU.L', '0HCA.L', '0Y26.L', '0MQ3.L', '0IYH.L', '0YEG.L', '0ANT.L', '0HBW.L',
-    '0Y82.L', '0H7W.L', '0YDK.L', '0AND.L', '0Y2B.L', 'ESRU.L', '0HFT.L', '0JLW.L', '0HD4.L',
-    '0MWZ.L', '0MJP.L', '0E7L.L', '0HE1.L', 'TDIV.L', '0H7E.L', '0H7P.L', '0H7J.L', '0W28.L',
-    '0YE9.L', '0H6L.L', 'TRET.L', 'OGG9.L', '0E7J.L', '0Y3I.L', 'VDPG.L', '0AO0.L', '0MJM.L',
-    '0ANY.L', '0W73.L', '0W84.L', 'TCEG.L', '0JJP.L', '0H7M.L', '0Y5Z.L', 'C.L', 'OSB1.L',
-    '0HDV.L', '0MPW.L', '0MWX.L', 'BP2.L', 'NFLE.L', '0MV9.L', '0H6W.L', '0YLL.L', '0HCL.L',
-    '0H75.L', '0HFW.L', 'OGB5.L', 'CNSG.L', '0W56.L', '0A1I.L', '0H7C.L', '0HFV.L', '0LLR.L',
-    'NVDE.L', '0ANO.L', '0ANM.L', 'SBE1.L', '0ANX.L', 'GSK2.L', '0HCG.L', '0MJN.L', '0HAY.L',
-    '0YEE.L', '0H7F.L', '0MNZ.L', '0HGS.L', '0MU1.L', 'OAUE.L', '0DT2.L', '0HCW.L', '0JJ4.L',
+SKIP_SYMBOLS = ([
+    # Symbols with some crazy fluctuations (values dropping to 1% of it value for a couple of
+    # days?!)
+    # '3BRS.L', '3DEL.L', '3DES.L', '3ELM.L', '3EML.L', '3EMS.L', '3EUS.L', '3LDE.L', '3USL.L',
+    # '3USS.L', 'AASG.L', 'ACWD.L', 'AIGG.L', 'AUGA.L', 'AUSAUW.SW', 'BATT.L', 'BIOT.L', 'BRIC.SW',
+    # 'CAHGBA.SW', 'CARB.L', 'CASH.L', 'CBCOMM.SW', 'CBNKY.SW', 'CBSEU.SW', 'CBU7.L', 'CBUS.SW', 'CBUSIH.SW',
+    # 'CCAU.L', 'CE9U.L', 'CEMA.L', 'CES1.L', 'CEU1.L', 'CEUG.L', 'CHIP.L', 'CIND.L', 'CJ1U.L',
+    # 'CJPU.L', 'CLIM.L', 'CMXC.L', 'CNAL.L', 'CPXJ.L', 'CRB.SW', 'CRPS.L', 'CSBGU7.SW', 'CSEMAS.SW',
+    # 'CSEMU.SW', 'CSH2.L', 'CSINDU.SW', 'CSMIB.SW', 'CSNKY.SW', 'CSP1.L', 'CSPXJ.SW', 'CSSX5E.SW', 'CSUK.SW',
+    # 'CSUKX.SW', 'CSUS.SW', 'CSUSS.SW', 'CWEG.L', 'CXAP.L', 'DEMP.L', 'DESD.L', 'DFEE.L', 'DFEP.L',
+    # 'DGRG.L', 'DGRP.L', 'DGSE.SW', 'DHSD.L', 'DISG.L', 'DL2P.L', 'DLTM.L', 'DS2P.L', 'DXGE.SW',
+    # 'DXGZ.L', 'ECOM.L', 'EEEG.SW', 'EEIE.L', 'EFIE.SW', 'EFIS.L', 'ELLE.L', 'EMCB.L', 'EMIM.L',
+    # 'EMIN.L', 'EPVL.L', 'EQDS.L', 'EQLT.L', 'EQQU.L', 'ERN1.L', 'ERNU.L', 'ERO.L', 'ES15.L',
+    # 'ESD.SW', 'ESDD.SW', 'ESE.SW', 'ESEH.SW', 'ESM.L', 'ETDD.SW', 'ETSY.L', 'ETZD.SW', 'EUGBA.SW',
+    # 'EUGBPD.SW', 'EUSC.L', 'FEMQ.L', 'FEMU.L', 'FEUZ.L', 'FEX.L', 'FEXU.L', 'FGQI.L', 'FING.L',
+    # 'FINW.L', 'FLO5.L', 'FTAL.SW', 'FUSA.L', 'GBDV.L', 'GGRG.L', 'GLAB.SW', 'GLCB.L', 'GS1EUA.SW',
+    # 'HEDP.SW', 'HEWA.L', 'HEWD.L', 'HMAD.L', 'HMCD.L', 'HMEM.L', 'HMFD.L', 'HMJD.L', 'HMJP.SW',
+    # 'HMUD.L', 'HMYD.L', 'HRUD.L', 'HTWD.L', 'HWWA.L', 'IBGX.L', 'ICOV.SW', 'IDEE.L', 'IDPE.L',
+    # 'IDTK.L', 'IE15.L', 'IEFM.L', 'IEFS.L', 'IEFV.L', 'IEGZ.SW', 'IEMA.L', 'IESE.SW', 'IESU.L',
+    # 'IEXF.SW', 'IGHY.L', 'IGLN.L', 'IGSD.L', 'IGSU.L', 'IHCU.L', 'IHYG.SW', 'IJPA.L', 'IJPN.SW',
+    # 'IMEA.SW', 'IMV.L', 'INAA.SW', 'INFG.L', 'IPXJ.L', 'IRCP.SW', 'ISAC.L', 'ISDU.L', 'ISDW.L',
+    # 'ISFE.SW', 'ISFR.L', 'ISP6.L', 'ISRL.L', 'IUKD.SW', 'IWFS.L', 'IWFV.L', 'J13U.L', 'JLES.L',
+    # 'JPFM.L', 'JPJP.L', 'JPNC.SW', 'JPNJPA.SW', 'JPUSBH.SW', 'JPXG.L', 'JPYP.L', 'L100.L', 'LCJD.L',
+    # 'LCNY.L', 'LCUD.L', 'LCUK.L', 'LGCF.L', 'LGCU.L', 'LGOV.SW', 'LOWE.L', 'LUMV.L', 'LUXG.L',
+    # 'LWMV.L', 'LYLEM.SW', 'LYMTI.SW', 'LYMTX.SW', 'MATG.L', 'MGTU.L', 'MIBX.L', 'MIDD.SW', 'MINV.L',
+    # 'MLPQ.L', 'MLPX.L', 'MMS.SW', 'MSEG.SW', 'MVAU.L', 'MVMX.L', 'MXFP.L', 'NRGG.L', 'OILW.L',
+    # 'PHPP.L', 'PQVG.L', 'PSES.L', 'PSRE.L', 'PSRM.L', 'PSWU.L', 'R2SC.L', 'RISE.L', 'ROBG.L',
+    # 'RTWO.L', 'S2USBH.SW', 'SBEG.L', 'SBUY.L', 'SEMH.L', 'SEUP.L', 'SF1CHA.SW', 'SG21.L', 'SGLD.L',
+    # 'SGLO.L', 'SGQD.L', 'SGQE.L', 'SGVB.L', 'SHYU.L', 'SMMCHA.SW', 'SPLT.L', 'SPPP.L', 'STAG.L',
+    # 'SUES.L', 'SUSS.L', 'SW2CHA.SW', 'TELG.L', 'TIP1D.SW', 'TIPU.L', 'TNOG.L', 'TP05.L', 'UB00.L',
+    # 'UB01.L', 'UB03.L', 'UB20.L', 'UB30.L', 'UB45.L', 'UBTL.L', 'UBXX.L', 'UC04.L', 'UC07.L',
+    # 'UC13.L', 'UC14.L', 'UC44.L', 'UC55.L', 'UC65.L', 'UC68.L', 'UC81.L', 'UC82.L', 'UC86.L',
+    # 'UC87.L', 'UC90.L', 'UC93.L', 'UC94.L', 'UC95.L', 'UC96.L', 'UC98.L', 'UC99.L', 'UCAP.L',
+    # 'UD03.L', 'UD05.L', 'UDVD.L', 'UGAS.L', 'UIFS.L', 'UKDV.SW', 'UKRE.L', 'UQLT.L', 'US13.L',
+    # 'US35.L', 'US71.L', 'USFM.L', 'USMV.L', 'USPY.L', 'USTY.L', 'UTIG.L', 'VDMO.L', 'VDTY.L',
+    # 'VDUC.L', 'VECP.SW', 'VEMT.L', 'VEUD.L', 'VILX.L', 'VIXL.L', 'VJPN.SW', 'VMID.SW', 'VNRT.L',
+    # 'VUSA.L', 'VWRD.L', 'WCOB.L', 'WOOD.SW', 'WSML.L', 'WSRUSA.SW', 'WTID.L', 'XAD1.SW', 'XAUS.L',
+    # 'XBGG.SW', 'XD3E.L', 'XDBG.SW', 'XDER.L', 'XDNS.L', 'XDWG.SW', 'XGDD.L', 'XGID.L', 'XGIG.L',
+    # 'XGSG.L', 'XKS2.L', 'XLFS.SW', 'XLIS.SW', 'XLKQ.L', 'XLKS.SW', 'XLPE.L', 'XLPP.L', 'XMAD.L',
+    # 'XMCX.L', 'XMMD.L', 'XMTD.L', 'XMUD.L', 'XNID.L', 'XPHG.L', 'XS3R.L', 'XS6R.L', 'XS7R.L',
+    # 'XSD2.L', 'XSNR.L', 'XSPS.L', 'XSTR.L', 'XSX6.L', 'XVTD.L', 'XX2D.L', 'ZIEU.L', 'ZWEE.L',
+    # 'ZWUU.L',
 ])
-
 
 SYMBOL_TO_INFO = {}
 
 
-def extract_ib_symbols(base_dir: Text, max_age_days: int = 30) -> List[Text]:
+def extract_ib_symbols(base_dir: Text, max_age_days: int= 30) -> List[Text]:
     # Get list of ETFs from IB published lists.
     symbols = set()
     # Prevent same symbol being used from different exchanges.
@@ -105,7 +104,7 @@ def extract_ib_symbols(base_dir: Text, max_age_days: int = 30) -> List[Text]:
             ib_symbol = df_ib_symbols[ii]
             description = df_descriptions[ii]
             if symbol[-3:] in CURRENCIES:
-                symbol = symbol[:-3]
+                symbol = symbol[: -3]
             if symbol in raw_symbols:
                 continue
             symbol_ex = symbol + '.' + source['suffix']
@@ -132,7 +131,7 @@ def extract_ib_symbols(base_dir: Text, max_age_days: int = 30) -> List[Text]:
 
 def _extract_symbols_from_source(url: Text,
                                  base_dir: Text,
-                                 max_age_days: int = 30):
+                                 max_age_days: int= 30):
     """Extract list of symbols from URL. Caches page for `max_age_days`."""
     url_hash = hashlib.md5(url.encode()).hexdigest()
     ib_dir = '{}/ib_html_cache'.format(base_dir)
