@@ -81,6 +81,7 @@ TICKERS = [
     #'ZGLD',  # ZKB Gold ETF AA CHF Klasse (SWX)
     #'ZPAL',  # ZKB ZKB Palladium ETF (SWX)
     'SGLD.L',  # SRC PH/ASST BKD 21001231 SER -> SGOL equivalent
+    'GLDU.AS', # Also available in London, but data available only for the Amsterdam.
 
     #================================================================================================
     # Bonds
@@ -170,7 +171,34 @@ DEFAULT_MIN_DATE = '2006-01-01'
 FIX_MIN_DATE = {
     'VIG': '2006-01-01',
     'VOT': '2006-08-25',
+    'JPSR.SW': '2018-07-02',
+    'WLDD.L': '2012-11-27',
+    'CASH.L': '2018-05-16',
+    'MEUG.L': '2018-05-16',
+    'CACX.L': '2014-09-01',
+    'MTXX.L': '2017-11-27',
+    'LCWL.L': '2019-09-17',
+    '3BRL.L': '2016-06-08',
+    'LCAN.L': '2018-04-09',
+    'FXRU.L': '2019-01-17',
+    'LYTSX.SW': '2018-04-05',
+    '3NGS.L': '2018-05-16',
+    'PSPN.SW': '2001-09-03',
+    '3NGL.L': '2017-03-15',
+    'CNAL.L': '2018-05-17',
+    'EEEA.SW': '2018-08-24',
+    'GENDEG.SW': '2018-09-05',
+    'IBTM.SW': '2008-01-04',
+    'IEMI.SW': '2008-10-16',
+    'IGIL.SW': '2008-08-07',
+    'IGLO.SW': '2009-03-13',
+    'ISWD.SW': '2008-11-12',
+    'LCAU.L': '2018-04-10',
+    'JJN': '2018-04-24',
+    'LAUU.L': '2018-03-26',
+    'LAUS.L': '2018-03-22',
 }
+
 
 FIX_MISSING_OPEN = {
     'AWTAX',

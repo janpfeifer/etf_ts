@@ -24,6 +24,25 @@ WTD_SYMBOLS_FILES = [
 _PARSE_ISO_8601_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
 MIN_NUM_PRICE_VALUES = config.YEARLY_PERIOD_IN_SERIAL / 2
 
+
+SKIP_SYMBOLS = set([
+    # Recend drastic changes in prices.
+    'LCWL.L', '3GS.L', '2NVD.L', '2VIS.L', '3BTL.L', 'AEXK.L',
+    '5ESGG.SW', 'ACWL.L', 'AT1D.SW', 'BBDD.L', 'BBTR.SW', 'BCHS.L', 'BENE.L', 'BYBG.L', 'C8M.L',
+    'CT5.L', 'CU5.L', 'ESM.L', 'FING.L', 'FKUD.L', 'FSKY.L', 'FUSP.SW', 'HEDG.L', 'INTL.L',
+    'INUG.L', 'J15R.L', 'JRBE.L', 'JRBU.L', 'KBA.L', 'KWEB.L', 'LCRW.L', 'META.L', 'NRGG.L',
+    'PIMT.L', 'PRIC.L', 'PRIG.L', 'PRIJ.L', 'PRIR.L', 'PRIT.L', 'PRIW.L', 'PRIZ.L', 'SG20.L',
+    'SGQG.L', 'SGQX.L', 'SJPP.L', 'STPU.L', 'VEUA.L', 'WELL.L', 'LYAU2.SW', 'LAUS.L',
+
+    # Removed due to insufficient data: could revisit later.
+    '2GS.L', 'BBLL.L', 'BCHN.L', 'CBGB10.SW', 'CBTPX.SW', 'CE71.L', 'CI2G.L', 'CS5.L', 'CUIH.L',
+    'DGRG.L', 'DOCT.L', 'DXGZ.L', 'EEUD.L', 'ETSY.L', 'FJP.L', 'FRCH.L', 'FRIN.L', 'J13E.L',
+    'JMFP.SW', 'KLWD.L', 'KRWL.L', 'LMMV.L', 'LWMV.L', 'OGSC.L', 'S2HGBD.SW', 'SMRG.L',
+    'TELG.L', 'TR3G.L', 'TR7S.SW', 'TRXG.L', 'UBIF.L', 'UC48.L', 'VDCA.L', 'VMIG.L',
+    'VNRA.L', 'VUAA.L', 'VUAG.L', 'VUKG.L', 'WCLD.L', 'WCOM.SW', 'XAGG.L',
+    'GLDU.SW'
+])
+
 YAHOO_SKIP_SYMBOLS = set([
     # Missing from Yahoo
     'CE8.SW', 'BBIL.SW', 'CI2.SW', 'TCMCI.SW', 'T3GB.SW', 'TAGCI.SW', 'JPGL.SW', 'CC1.SW',
@@ -100,10 +119,11 @@ YAHOO_SKIP_SYMBOLS = set([
     'XDBG.SW', 'XDWG.SW',
 
     'VFORX',
+
 ])
 
 WTD_SKIP_SYMBOLS = set([
-    '2JPM.L', '5HEP.L', 'MWJ.L', 'VFORX'
+    '2JPM.L', '5HEP.L', 'MWJ.L', 'VFORX', 'JPSR.SW',
 ])
 
 
@@ -150,6 +170,11 @@ class DataManager:
     if not os.path.exists(p):
       os.makedirs(p)
     return p
+
+  def _ValidSymbol(self, symbol: Text) -> bool:
+    if symbol in SKIP_SYMBOLS or (self._FromYahoo(symbol) and symbol in YAHOO_SKIP_SYMBOLS):
+      return False
+    return True
 
   def _FromYahoo(self, symbol: Text) -> bool:
     return (symbol not in self._wtd_available_symbols) or (symbol in WTD_SKIP_SYMBOLS)
@@ -223,6 +248,9 @@ class DataManager:
     for field in ['Close', 'Date']:
       df = df.loc[~df[field].isna()]
 
+    # Reset index so it properly is a range from 0 to len(df)-1
+    df = df.reset_index(drop=True)
+
     # Filter out some odd rows (with very different values, I assume a bug)
     close = df['Close'].values
     close_minus_1 = np.roll(close, -1)
@@ -230,10 +258,11 @@ class DataManager:
     extremes = np.logical_and(_extremes(close, close_minus_1),
                               _extremes(close, close_plus_1))
 
-    if 'Open' in df:
+    if 'Open' in df and df['Open'].shape[0] > 20:
       open_v = df['Open'].values
       open_minus_1 = np.roll(open_v, -1)
       open_plus_1 = np.roll(open_v, +1)
+      open_plus_1[0] = open_plus_1[1]
       extremes = np.logical_or(extremes,
                                np.logical_and(_extremes(open_v, open_minus_1),
                                               _extremes(open_v, open_plus_1)))
@@ -242,9 +271,21 @@ class DataManager:
       w = np.where(extremes)[0]
       logging.info(f'Found extreme differences in {symbol}: dropping {len(w)} rows {w}')
       df = df.loc[~extremes]
+      # Reset index so it properly is a range from 0 to len(df)-1
+      df = df.reset_index(drop=True)
 
-    # Reset index so it properly is a range from 0 to len(df)-1
-    df = df.reset_index(drop=True)
+      # Drastic change in values are still likely wrong (there are so much of this
+    # broken data ...)
+    if 'Open' in df and df['Open'].shape[0] > 20:
+      open_v = df['Open'].values
+      open_plus_1 = np.roll(open_v, +1)
+      open_plus_1[0] = open_plus_1[1]
+      open_changes = _extremes(open_v, open_plus_1)
+      if np.any(open_changes):
+        dates = []
+        for idx in np.where(open_changes):
+          dates.append(df['Date'][idx].iat[0])
+        logging.info(f'There is a skip of prices in {symbol}: in dates {dates}')
 
     if len(df.index) < config.YEARLY_PERIOD_IN_SERIAL:
       return False
@@ -283,7 +324,7 @@ class DataManager:
     available_symbols = []
     ignored_symbols = []
     for symbol in symbols:
-      if not self._FromYahoo(symbol) or symbol not in YAHOO_SKIP_SYMBOLS:
+      if self._ValidSymbol(symbol):
         available_symbols.append(symbol)
       else:
         ignored_symbols.append(symbol)
@@ -394,4 +435,4 @@ def log_symbols(msg, symbols):
 
 
 def _extremes(val: np.array, val_delta: np.array) -> np.array:
-  return np.minimum(val, val_delta) < 0.10 * np.maximum(val, val_delta)
+  return np.minimum(val, val_delta) < 0.60 * np.maximum(val, val_delta)

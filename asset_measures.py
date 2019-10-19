@@ -46,7 +46,7 @@ def _trim_before_serial(df: pd.DataFrame, min_serial: int) -> pd.DataFrame:
     if trim_start == 0:
         return df
     df = df.loc[trim_start:].copy()
-    df.index = np.arange(len(df['Serial']))
+    df = df.reset_index(drop=True)
     return df
 
 
@@ -122,6 +122,7 @@ def AddDerivedValues(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
     if symbol in config.FIX_MIN_DATE:
         min_serial = StringDateToSerial(config.FIX_MIN_DATE[symbol])
         df = _trim_before_serial(df, min_serial)
+
     if symbol in config.FIX_MISSING_OPEN:
         df['Open'] = np.concatenate([[df['Close'][0]], df['Close'][:-1]])
         df['Volume'] = np.ones_like(df['Close'])

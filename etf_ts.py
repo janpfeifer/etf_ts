@@ -84,7 +84,7 @@ def main(argv):
     # Select and sort symbols.
     symbols = config_ib.extract_ib_symbols(FLAGS.data, FLAGS.max_age_days)
     if FLAGS.symbols is not None:
-	    symbols = FLAGS.symbols
+        symbols = FLAGS.symbols
 
     # Download data or reload it from disk cache.
     dmgr = data_manager.DataManager(FLAGS.data)
@@ -142,10 +142,10 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
     total_adjusted_gain = optimizations.total_annualized_gain_from_log_gains(
         adjusted_log_gains)
     if tf.reduce_any(tf.math.is_nan(total_gain)) or tf.reduce_any(tf.math.is_nan(total_adjusted_gain)):
-	    logging.info(f'nan in log_gains: {tf.where(tf.math.is_nan(log_gains))}')
-	    logging.info(f'nan in adjusted: {tf.where(tf.math.is_nan(adjusted_log_gains))}')
-	    logging.info('You probably want to remove those symbols with noisy data. '
-	    	'Run with stats=per_asset, redirect to a file and grep for nan.')
+        logging.info(f'nan in log_gains: {tf.where(tf.math.is_nan(log_gains))}')
+        logging.info(f'nan in adjusted: {tf.where(tf.math.is_nan(adjusted_log_gains))}')
+        logging.info('You probably want to remove those symbols with noisy data. '
+                     'Run with stats=per_asset, redirect to a file and grep for nan.')
 
     # Print it out.
     for symbol_idx, symbol in enumerate(symbols):
@@ -307,7 +307,10 @@ def assets_selection(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf
     selection_str = [f'{symbol}: {ratio:3.1f}%' for ratio, symbol in selection]
     print('_selection,{}'.format(','.join(selection_str)))
     for ratio, symbol in selection:
-        print(f'{symbol},{ratio:3.1f}%')
+        description = '?'
+        if symbol in config_ib.SYMBOL_TO_INFO[symbol]:
+            description = config_ib.SYMBOL_TO_INFO[symbol]['description']
+        print(f'{symbol},{ratio:3.1f}%,{description}')
 
 
 def greedy(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
