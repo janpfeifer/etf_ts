@@ -150,7 +150,9 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
     # Print it out.
     for symbol_idx, symbol in enumerate(symbols):
         gain = total_gain[symbol_idx]
-        description = config_ib.SYMBOL_TO_INFO[symbol]['description']
+        description = '?'
+        if symbol in config_ib.SYMBOL_TO_INFO:
+            description = config_ib.SYMBOL_TO_INFO[symbol]['description']
         adjusted_gain = total_adjusted_gain[symbol_idx]
 
         initial_value = initial_values[symbol_idx]
@@ -308,7 +310,7 @@ def assets_selection(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf
     print('_selection,{}'.format(','.join(selection_str)))
     for ratio, symbol in selection:
         description = '?'
-        if symbol in config_ib.SYMBOL_TO_INFO[symbol]:
+        if symbol in config_ib.SYMBOL_TO_INFO:
             description = config_ib.SYMBOL_TO_INFO[symbol]['description']
         print(f'{symbol},{ratio:3.1f}%,{description}')
 
