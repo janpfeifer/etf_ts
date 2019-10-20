@@ -79,8 +79,8 @@ def _merge_dividends(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
                 new_serial = -1
                 for ii in range(config.MONTHLY_PERIOD_IN_SERIAL):
                     new_serial = int(serial - ii - 1)
-                    new_date = SerialDateToString(new_serial)
                     if new_serial in valid_serials:
+                        new_date = SerialDateToString(new_serial)
                         new_dividends.append(
                             {'Serial': new_serial, 'Dividends': amount})
                         logging.info(f'Missing marked for dividend on {date} (serial={serial}), moved to {new_date} instead')
@@ -141,7 +141,7 @@ def AddDerivedValues(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
     daily_gain = next_open - _open
     df['DailyValuation'] = daily_gain
     logging.info('Sum Valuation={}'.format(np.sum(daily_gain)))
-    daily_gain = daily_gain + df['SpreadDividends']
+    daily_gain = daily_gain + df['Dividends']
     logging.info('Sum Gains={}'.format(np.sum(daily_gain)))
     df['DailyGain'] = daily_gain
     df['PctDailyGain'] = 100.0 * daily_gain / _open
