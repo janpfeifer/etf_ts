@@ -208,6 +208,7 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
         'steps': FLAGS.mix_steps,
         'learning_rate': 0.1,  # 3.3e-2,
         'loss_cost': FLAGS.loss_cost,
+        'gain_power': FLAGS.gain_power,
         'l1': 1e-3,
         'l2': 1e-6,
     }

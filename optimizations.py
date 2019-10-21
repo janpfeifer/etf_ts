@@ -9,7 +9,7 @@ import config
 import tf_lib
 
 
-def mix_gain(logits: tf.Tensor, logits_mask: tf.Tensor, log_gains: tf.Tensor, 
+def mix_gain(logits: tf.Tensor, logits_mask: tf.Tensor, log_gains: tf.Tensor,
              loss_cost: float, gain_power: float) -> Tuple[tf.Tensor, tf.Tensor]:
     """Calculate the gains from the mix of assets given by the logits.
 
@@ -32,41 +32,41 @@ def mix_gain(logits: tf.Tensor, logits_mask: tf.Tensor, log_gains: tf.Tensor,
 
     """
     weights = tf_lib.masked_softmax(logits, logits_mask)
-    #print(f'weights={weights}')
+    logging.debug(f'weights={weights}')
     log_gains_cum = tf.cumsum(log_gains, axis=0, exclusive=True)
     values = weights * tf.math.exp(log_gains_cum)
-    #print(f'values: shape={values.shape}, values={values.numpy()}')
+    logging.debug(f'values: shape={values.shape}, values={values.numpy()}')
     sum_values = tf.reduce_sum(values, axis=-1)
-    #print(f'sum_values: shape={sum_values.shape}, values={sum_values.numpy()}')
+    logging.debug(f'sum_values: shape={sum_values.shape}, values={sum_values.numpy()}')
     shifted_sum_values = tf.concat([[1.0], sum_values[:-1]], axis=0)
-    #print(f'shifted_sum_values: shape={shifted_sum_values.shape}, values={shifted_sum_values.numpy()}')
+    logging.debug(f'shifted_sum_values: shape={shifted_sum_values.shape}, values={shifted_sum_values.numpy()}')
 
     # Check cost of losses.
     all_assets_gains_ratio = sum_values / shifted_sum_values
     mix_gains = all_assets_gains_ratio - 1.0
-    #print(f'mix_gains: shape={mix_gains.shape}, values={mix_gains.numpy()}')
+    logging.debug(f'mix_gains: shape={mix_gains.shape}, values={mix_gains.numpy()}')
     loss_cost_on_gains = tf.where(
-        mix_gains > 0.0, 0.0, (loss_cost-1) * mix_gains)
-    #print(f'loss_cost: shape={loss_cost_on_gains.shape}, values={loss_cost_on_gains.numpy()}')
+        mix_gains > 0.0, 0.0, (loss_cost - 1) * mix_gains)
+    logging.debug(f'loss_cost: shape={loss_cost_on_gains.shape}, values={loss_cost_on_gains.numpy()}')
 
     # Cost of wins: we want to favor
     if gain_power == 1:
         adjustment_gains = None
-    else: 
-        #print(f'gains_ratio: shape={all_assets_gains_ratio.shape}, values={all_assets_gains_ratio.numpy()}')
+    else:
+        logging.debug(f'gains_ratio: shape={all_assets_gains_ratio.shape}, values={all_assets_gains_ratio.numpy()}')
         all_assets_log_gains = tf.math.log(all_assets_gains_ratio)
-        #print(f'log_gains: shape={all_assets_log_gains.shape}, values={all_assets_log_gains.numpy()}')
+        logging.debug(f'log_gains: shape={all_assets_log_gains.shape}, values={all_assets_log_gains.numpy()}')
         adjustment_gains = tf.where(
-            all_assets_log_gains < 0, 0, tf.math.pow(all_assets_log_gains, gain_power) - all_assets_log_gains)
-        #print(f'gain_cost: shape={adjustment_gains.shape}, values={adjustment_gains.numpy()}')
+            all_assets_log_gains < 0, 0, (tf.math.pow(all_assets_log_gains + 1.0, gain_power) - 1.0) - all_assets_log_gains)
+        logging.debug(f'gain_cost: shape={adjustment_gains.shape}, values={adjustment_gains.numpy()}')
         adjustment_gains = tf.exp(tf.reduce_sum(adjustment_gains))
-        #print(f'gain_cost: {adjustment_gains}')
+        logging.debug(f'gain_cost: {adjustment_gains}')
 
     mix_gain = tf.reduce_sum(values[-1])
     adjustment = tf.exp(tf.reduce_sum(tf.math.log(1.0 + loss_cost_on_gains)))
     if adjustment_gains is not None:
         adjustment *= adjustment_gains
-    #print(f'adjustment={adjustment}')
+    logging.debug(f'adjustment={adjustment}')
     adjusted_mix_gain = adjustment * mix_gain
     return mix_gain, adjusted_mix_gain
 
@@ -80,6 +80,7 @@ def optimize_mix(symbols: List[Text], logits_mask: tf.Tensor, log_gains: tf.Tens
 
     # Maximize adjusted_mixed_gains ...
     loss_cost = float(hparams['loss_cost'])
+    gain_power = float(hparams['gain_power'])
     learning_rate = hparams['learning_rate']
     steps = int(hparams['steps'])
     l1_l2_reg = tf.keras.regularizers.L1L2(l1=hparams['l1'], l2=hparams['l2'])
@@ -88,7 +89,7 @@ def optimize_mix(symbols: List[Text], logits_mask: tf.Tensor, log_gains: tf.Tens
     for train_ii in range(steps):
         with tf.GradientTape() as tape:
             mix_gain_, adjusted_mix_gain = mix_gain(
-                assets_mix_logits, logits_mask, log_gains, loss_cost)
+                assets_mix_logits, logits_mask, log_gains, loss_cost, gain_power)
             assets_mix = tf_lib.masked_softmax(assets_mix_logits, logits_mask)
             loss = l1_l2_reg(assets_mix) - adjusted_mix_gain
             trainable_vars = [assets_mix_logits]
@@ -150,9 +151,11 @@ def adjusted_log_gains(log_gains: tf.Tensor, loss_cost: float, gain_power: float
             for the loss_cost penalty.
     """
     # Calculate adjusted log gain assuming all are losses.
-    adjusted_neg = tf.math.log(loss_cost * (tf.math.exp(log_gains) - 1.0) + 1.0)
+    adjusted_neg = tf.math.log(
+        loss_cost * (tf.math.exp(log_gains) - 1.0) + 1.0)
     if gain_power != 1:
-        adjusted_pos = tf.math.power(tf.math.abs(log_gains), gain_power)
+        adjusted_pos = tf.math.pow(tf.math.abs(
+            log_gains) + 1.0, gain_power) - 1.0
     else:
         adjusted_pos = log_gains
 

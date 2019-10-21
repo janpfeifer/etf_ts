@@ -16,7 +16,7 @@ class OptimizationsTest(tf.test.TestCase):
 
         # Try first only iwth penalties for loss.
         mix_gain, adjusted_mix_gain = optimizations.mix_gain(
-            logits, logits_mask, tf.transpose(log_gains), 
+            logits, logits_mask, tf.transpose(log_gains),
             1.1, 1)
         print(f'mix_gain={mix_gain.numpy()}, adjusted_mix_gain={adjusted_mix_gain.numpy()}')
         self.assertNear(mix_gain, 1.75, 1e-4)
@@ -26,14 +26,14 @@ class OptimizationsTest(tf.test.TestCase):
 
         # Test that a large gain suffers more from power function than many
         # smaller ones.
-        gain_power = 0.9
+        gain_power = 0.5
         logits = tf.convert_to_tensor([1.0, -1000])
         gains = tf.convert_to_tensor([
             [2.0, 2.0, 1],
             [1.0, 4.0, 1]])
         log_gains = tf.math.log(gains)
         mix_gain, adjusted_mix_gain_a = optimizations.mix_gain(
-            logits, logits_mask, tf.transpose(log_gains), 
+            logits, logits_mask, tf.transpose(log_gains),
             1.1, gain_power)
         print(f'mix_gain={mix_gain.numpy()}, adjusted_mix_gain={adjusted_mix_gain_a.numpy()}')
         self.assertNear(mix_gain, 4.0, 1e-4)
@@ -41,12 +41,11 @@ class OptimizationsTest(tf.test.TestCase):
 
         logits = tf.convert_to_tensor([-1000.0, 1.0])
         mix_gain, adjusted_mix_gain_b = optimizations.mix_gain(
-            logits, logits_mask, tf.transpose(log_gains), 
+            logits, logits_mask, tf.transpose(log_gains),
             1.1, gain_power)
         print(f'mix_gain={mix_gain.numpy()}, adjusted_mix_gain={adjusted_mix_gain_b.numpy()}')
         self.assertNear(mix_gain, 4.0, 1e-4)
         self.assertGreater(adjusted_mix_gain_a, adjusted_mix_gain_b)
-
 
     def test_adjusted_log_gains(self):
         x = tf.convert_to_tensor([[1.0, -1.0, -0.5], [0.1, -0.1, 0.5]],
