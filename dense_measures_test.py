@@ -9,6 +9,9 @@ import dense_measures
 class DenseMeasuresTest(unittest.TestCase):
 
     def setUp(self):
+        dense_measures.MAX_DAYS=None
+        dense_measures.MAX_ACCEPTABLE_SKIP=10
+
         data = [
             {'Date': '2019-01-01', 'Open': 10.0, 'Close': 11.0,
                 'High': 11.5, 'Low': 9.9, 'Volume': 100},
@@ -79,14 +82,12 @@ class DenseMeasuresTest(unittest.TestCase):
                         'base_p1 dataset, only first 8 are included.')
         self.assertTrue(np.all(~mask[11:, 1]),
                         'base_p1 dataset, only first 8 are included.')
-        self.assertTrue(np.all(mask[:4, 2]),
-                        'base_p2 dataset includes [0:4] and [8:12] only.')
-        self.assertTrue(np.all(~mask[4:8, 2]),
-                        'base_p2 dataset includes [0:4] and [8:12] only.')
-        self.assertTrue(np.all(mask[8:, 2]),
-                        'base_p2 dataset includes [0:4] and [8:12] only.')
+        self.assertTrue(np.all(~mask[:, 2]),
+                        'base_p2 dataset should have been masked out, because of large skip window.')
 
-        print(f'dense={dense}')
+        # print(f'dense={dense}')
+        for field in dense.keys():
+            self.assertEqual(dense[field].shape, (12 , 3))
 
 
 if __name__ == '__main__':

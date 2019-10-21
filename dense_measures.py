@@ -15,12 +15,16 @@ import sys
 from typing import Dict, List, Set, Text, Tuple
 
 import asset_measures
+import data_manager
 import config
 
 FLAGS = flags.FLAGS
 
 # If set, take only the latest fiven number of days.
 MAX_DAYS = None
+
+# Any skips in the data for an asset, and the asset is masked out.
+MAX_ACCEPTABLE_SKIP = 15
 
 _MAX_SERIAL = sys.maxsize
 
@@ -77,18 +81,29 @@ def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[T
         filter(lambda x: x >= first_serial, list(serials_set)))
     if MAX_DAYS is not None:
         all_serials = all_serials[-MAX_DAYS:]
+    max_serial = all_serials[-1]
+    max_skip = _max_skip(np.array(all_serials), max_serial)
+    logging.debug(f'Combined dataset from all assets max_skip={max_skip}')
 
     # Trim DataFrames to only the entries that we are interest in.
-    logging.info('  - limit only the days that matter.')
+    logging.info('  - limit only the days that matter and check max_skip of each symbol.')
     limited_data = {}
+    disabled_symbols = set()
     for symbol in ordered_symbols:
         df = data[symbol]
-        limited_data[symbol] = df[df['Serial'].isin(
-            all_serials)].reset_index(drop=True)
+        df = df[df['Serial'].isin(all_serials)].reset_index(drop=True)
+        sym_max_skip = _max_skip(df['Serial'], max_serial)
+        if sym_max_skip > MAX_ACCEPTABLE_SKIP:
+            disabled_symbols.add(symbol)
+        print(f'{symbol}: max skip = {sym_max_skip} (max_skip={max_skip})')
+        limited_data[symbol] = df
 
     # TODO: join by key 'Serial', one symbol at a time.
-
-    # TODO: mask out symbols that have jump in Serial > 15 days.
+    all_serials_df = pd.DataFrame({'Serial': all_serials})
+    for symbol in ordered_symbols:
+        limited_data[symbol] = pd.merge(
+            all_serials_df, limited_data[symbol], on='Serial', how='outer')
+        print(f'limited_data[{symbol}]={limited_data[symbol]}\n')
 
     # Initalizes matrices with zeros.
     logging.info(
@@ -124,7 +139,20 @@ def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[T
                 field_to_ndarray[field][serial_idx,
                                         symbol_idx] = df[field][current_indices[symbol_idx]]
 
+
+    print(f'  - disable symbols with windows > {MAX_ACCEPTABLE_SKIP} days without data', list(disabled_symbols))
+    for ii, symbol in enumerate(ordered_symbols):
+        if symbol in disabled_symbols:
+            mask[:, ii] = False
+
     return field_to_ndarray, mask, all_serials
+
+
+def _max_skip(serials: np.ndarray, last_serial:int) -> int:
+    next = np.roll(serials, -1)
+    next[-1] = last_serial
+    diff = next - serials
+    return np.amax(diff)
 
 
 def _FindActive(data: Dict[Text, pd.DataFrame], ordered_symbols: List[Text],
