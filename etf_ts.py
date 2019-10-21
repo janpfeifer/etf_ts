@@ -76,6 +76,9 @@ flags.DEFINE_float(
     'mix_applying_period', 0.25,
     'For the mix strategy, the amount of years (fractional) the strategy is applied after optimized. '
     'Defines how often one will have to re-invest.')
+flags.DEFINE_integer(
+    'max_days', None,
+    'If set, look at most at the latest given number of days. Otherwise look at everything.')
 
 
 def main(argv):
@@ -84,6 +87,7 @@ def main(argv):
     tf_lib.config_gpu()
 
     asset_measures.TAX_ON_DIVIDENDS_PERCENTAGE = FLAGS.tax_on_dividends
+    dense_measures.MAX_DAYS = FLAGS.max_days
 
     # Select and sort symbols.
     symbols = config_ib.extract_ib_symbols(FLAGS.data, FLAGS.max_age_days)

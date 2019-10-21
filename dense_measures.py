@@ -16,23 +16,21 @@ from typing import Dict, List, Set, Text, Tuple
 
 import asset_measures
 import config
-import data_manager
 
 FLAGS = flags.FLAGS
-flags.DEFINE_integer(
-    'max_days', None,
-    'If set, take only the latest fiven number of days.')
 
+# If set, take only the latest fiven number of days.
+MAX_DAYS = None
 
 _MAX_SERIAL = sys.maxsize
 
 
-def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[Text]
+def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[Text]
                          ) -> Tuple[Dict[Text, np.ndarray], np.ndarray, List[int]]:
     """Returns a mapping of field name to associated data, and a bool mask of values present.
 
     Args:
-        dmgr: DataManager containing the data for all symbols.
+        data: Map of asset's symbol name to dataframe with the asset's information.
         ordered_symbols: List of symbols, its order will determine the order of
           the values returned.
 
@@ -46,6 +44,7 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
         mask: A matrix of bools, of shape [NUM_SERIALS, NUM_SYMBOLS]. It indicates
           whether information for the particular symbol is available in a particular
           "serial" (a serial number representing a day).
+        used_serials: The `Serial` (date converted to serial number) values used.
     """
     logging.info('Generating dense matrices.')
 
@@ -53,11 +52,11 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
     logging.info('  - checking for NaNs.')
     has_nans = False
     for symbol in ordered_symbols:
-        df = dmgr.data[symbol]
+        df = data[symbol]
         for field in config.FIELDS_FOR_TENSORFLOW:
             values = df[field].values[asset_measures.MAX_WINDOW_SIZE:]
-            if FLAGS.max_days is not None:
-                values = values[-FLAGS.max_days:]
+            if MAX_DAYS is not None:
+                values = values[-MAX_DAYS:]
             if np.any(np.isnan(values)):
                 logging.info(f'Found nan in asset {symbol}, field {field}, in rows {np.where(np.isnan(df[field].values))}')
                 has_nans = True
@@ -69,15 +68,27 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
     first_serial = asset_measures.StringDateToSerial(config.START_DATE)
     serials_set = set()  # type: Set[int]
     for symbol in ordered_symbols:
-        serials = set(dmgr.data[symbol]['Serial'])
+        serials = set(data[symbol]['Serial'])
         if serials_set is None:
             serials_set = serials
         else:
             serials_set = serials_set.union(serials)
     all_serials = sorted(
         filter(lambda x: x >= first_serial, list(serials_set)))
-    if FLAGS.max_days is not None:
-        all_serials = all_serials[-FLAGS.max_days:]
+    if MAX_DAYS is not None:
+        all_serials = all_serials[-MAX_DAYS:]
+
+    # Trim DataFrames to only the entries that we are interest in.
+    logging.info('  - limit only the days that matter.')
+    limited_data = {}
+    for symbol in ordered_symbols:
+        df = data[symbol]
+        limited_data[symbol] = df[df['Serial'].isin(
+            all_serials)].reset_index(drop=True)
+
+    # TODO: join by key 'Serial', one symbol at a time.
+
+    # TODO: mask out symbols that have jump in Serial > 15 days.
 
     # Initalizes matrices with zeros.
     logging.info(
@@ -102,12 +113,12 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
                 print_count *= 10
 
         active_symbols = _FindActive(
-            dmgr, ordered_symbols, serial, current_indices)
+            limited_data, ordered_symbols, serial, current_indices)
         if not len(active_symbols):
             raise ValueError('No active symbols for serial {} == {}'.format(
                 serial, asset_measures.SerialDateToString(serial)))
         for symbol_idx in active_symbols:
-            df = dmgr.data[ordered_symbols[symbol_idx]]
+            df = limited_data[ordered_symbols[symbol_idx]]
             mask[serial_idx, symbol_idx] = True
             for field in config.FIELDS_FOR_TENSORFLOW:
                 field_to_ndarray[field][serial_idx,
@@ -116,12 +127,12 @@ def DenseMeasureMatrices(dmgr: data_manager.DataManager, ordered_symbols: List[T
     return field_to_ndarray, mask, all_serials
 
 
-def _FindActive(dmgr: data_manager.DataManager, ordered_symbols: List[Text],
+def _FindActive(data: Dict[Text, pd.DataFrame], ordered_symbols: List[Text],
                 target_serial: int, current_indices: List[int]) -> List[int]:
     active = []
     for symbol_idx, symbol in enumerate(ordered_symbols):
         serial_idx = current_indices[symbol_idx]
-        serials = dmgr.data[symbol]['Serial']
+        serials = data[symbol]['Serial']
         while serial_idx < len(serials) and serials[serial_idx] < target_serial:
             serial_idx += 1
         current_indices[symbol_idx] = serial_idx

@@ -35,7 +35,7 @@ SKIP_SYMBOLS = set([
     'SGQG.L', 'SGQX.L', 'SJPP.L', 'STPU.L', 'VEUA.L', 'WELL.L', 'LYAU2.SW', 'LAUS.L',
 
     # Insufficient / stale data.
-    'BRZ.SW',
+    # 'BRZ.SW',
 
     # Removed due to insufficient data: could revisit later.
     '2GS.L', 'BBLL.L', 'BCHN.L', 'CBGB10.SW', 'CBTPX.SW', 'CE71.L', 'CI2G.L', 'CS5.L', 'CUIH.L',
