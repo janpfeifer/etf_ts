@@ -26,13 +26,16 @@ MIN_NUM_PRICE_VALUES = config.YEARLY_PERIOD_IN_SERIAL / 2
 
 
 SKIP_SYMBOLS = set([
-    # Recend drastic changes in prices.
+    # Recent drastic changes in prices.
     'LCWL.L', '3GS.L', '2NVD.L', '2VIS.L', '3BTL.L', 'AEXK.L',
     '5ESGG.SW', 'ACWL.L', 'AT1D.SW', 'BBDD.L', 'BBTR.SW', 'BCHS.L', 'BENE.L', 'BYBG.L', 'C8M.L',
     'CT5.L', 'CU5.L', 'ESM.L', 'FING.L', 'FKUD.L', 'FSKY.L', 'FUSP.SW', 'HEDG.L', 'INTL.L',
     'INUG.L', 'J15R.L', 'JRBE.L', 'JRBU.L', 'KBA.L', 'KWEB.L', 'LCRW.L', 'META.L', 'NRGG.L',
     'PIMT.L', 'PRIC.L', 'PRIG.L', 'PRIJ.L', 'PRIR.L', 'PRIT.L', 'PRIW.L', 'PRIZ.L', 'SG20.L',
     'SGQG.L', 'SGQX.L', 'SJPP.L', 'STPU.L', 'VEUA.L', 'WELL.L', 'LYAU2.SW', 'LAUS.L',
+
+    # Insufficient / stale data.
+    'BRZ.SW',
 
     # Removed due to insufficient data: could revisit later.
     '2GS.L', 'BBLL.L', 'BCHN.L', 'CBGB10.SW', 'CBTPX.SW', 'CE71.L', 'CI2G.L', 'CS5.L', 'CUIH.L',
