@@ -51,11 +51,15 @@ flags.DEFINE_bool(
     'force_recalc', False,
     'If true forces recalculation of derived values.')
 flags.DEFINE_float(
-    'loss_cost', 1.1,
+    'loss_cost', 1.3,
     'Relative cost of losses compared to gain: the larger this number the larger the penalty for volatility.')
 flags.DEFINE_float(
     'tax_on_dividends', asset_measures.TAX_ON_DIVIDENDS_PERCENTAGE,
     'Percentage of dividends (0 to 1.0) loss due to taxes.')
+flags.DEFINE_float(
+    'gain_power', 1,
+    'Log gains when positive are powered by this value. Values < 1.0 will tend to make choices more smooth.')
+
 flags.DEFINE_list(
     'stats', 'per_asset,greedy,average,mix,selection',
     'List of stats to output. A selection of: per_asset, etc.'
@@ -106,7 +110,7 @@ def main(argv):
 
     # Extra metrics calculated in Tensorflow
     fields['AdjustedLogDailyGain'] = optimizations.adjusted_log_gains(
-        fields['LogDailyGain'], FLAGS.loss_cost)
+        fields['LogDailyGain'], FLAGS.loss_cost, FLAGS.gain_power)
 
     # Print out gains for each symbol.
     # Header of all outputs.
@@ -293,6 +297,7 @@ def assets_selection(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf
         'steps': FLAGS.mix_steps,
         'learning_rate': 0.1,
         'loss_cost': FLAGS.loss_cost,
+        'gain_power': FLAGS.gain_power,
         'l1': 1e-3,
         'l2': 1e-6,
     }
