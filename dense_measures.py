@@ -98,53 +98,33 @@ def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[T
         print(f'{symbol}: max skip = {sym_max_skip} (max_skip={max_skip})')
         limited_data[symbol] = df
 
-    # TODO: join by key 'Serial', one symbol at a time.
+    # Join by key 'Serial', one symbol at a time.
+    logging.info('  - Join all_serials with each assets dataset.')
     all_serials_df = pd.DataFrame({'Serial': all_serials})
     for symbol in ordered_symbols:
         limited_data[symbol] = pd.merge(
             all_serials_df, limited_data[symbol], on='Serial', how='outer')
-        print(f'limited_data[{symbol}]={limited_data[symbol]}\n')
 
-    # Initalizes matrices with zeros.
-    logging.info(
-        '  - zero initialize arrays for fields {}'.format(', '.join(config.FIELDS_FOR_TENSORFLOW)))
-    rows = len(all_serials)
-    columns = len(ordered_symbols)
-    field_to_ndarray = {
-        field: np.zeros(shape=[rows, columns], dtype=float) for field in config.FIELDS_FOR_TENSORFLOW
-    }
-    mask = np.zeros(shape=[rows, columns], dtype=bool)
+    # Collect dense matrices, one per field.
+    logging.info(f'  - Gathering dense matrices for each field')
+    field_to_ndarray = {}
+    for field in config.FIELDS_FOR_TENSORFLOW:
+        logging.info(f'    Gathering data for {field}')
+        field_to_ndarray[field] = np.stack([
+            limited_data[symbol][field].values for symbol in ordered_symbols],
+            axis=1)
 
-    # Loop sequentially over serial numbers.
-    logging.info(
-        '  - loop over serials vs find all date serial numbers we have information.')
-    current_indices = [0 for symbol in ordered_symbols]
-    print_count = 10
-    total_count = len(all_serials)
-    for serial_idx, serial in enumerate(all_serials):
-        if serial_idx > 0 and serial_idx % print_count == 0:
-            logging.info(f'    done {serial_idx} out of {total_count}')
-            if print_count * 10 < total_count:
-                print_count *= 10
-
-        active_symbols = _FindActive(
-            limited_data, ordered_symbols, serial, current_indices)
-        if not len(active_symbols):
-            raise ValueError('No active symbols for serial {} == {}'.format(
-                serial, asset_measures.SerialDateToString(serial)))
-        for symbol_idx in active_symbols:
-            df = limited_data[ordered_symbols[symbol_idx]]
-            mask[serial_idx, symbol_idx] = True
-            for field in config.FIELDS_FOR_TENSORFLOW:
-                field_to_ndarray[field][serial_idx,
-                                        symbol_idx] = df[field][current_indices[symbol_idx]]
-
-
-    print(f'  - disable symbols with windows > {MAX_ACCEPTABLE_SKIP} days without data', list(disabled_symbols))
-    for ii, symbol in enumerate(ordered_symbols):
+    # Generate mask.
+    mask_parts = []
+    mask_false = np.zeros_like(all_serials, dtype=np.bool)
+    for symbol in ordered_symbols:
         if symbol in disabled_symbols:
-            mask[:, ii] = False
-
+            mask_parts.append(mask_false)
+        else:
+            mask_parts.append(
+                [isinstance(v, str) 
+                for v in limited_data[symbol]['Date'].values])
+    mask = np.stack(mask_parts, axis=1)
     return field_to_ndarray, mask, all_serials
 
 

@@ -110,7 +110,7 @@ def main(argv):
 
     # Calculate dense ordered arrays.
     fields, mask, all_serials = dense_measures.DenseMeasureMatrices(
-        dmgr, symbols)
+        dmgr.data, symbols)
 
     # Extra metrics calculated in Tensorflow
     fields['AdjustedLogDailyGain'] = optimizations.adjusted_log_gains(

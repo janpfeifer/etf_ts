@@ -1,3 +1,7 @@
+from absl import app
+from absl import logging
+from absl.testing import absltest
+
 import numpy as np
 import pandas as pd
 import unittest
@@ -6,7 +10,7 @@ import asset_measures
 import dense_measures
 
 
-class DenseMeasuresTest(unittest.TestCase):
+class DenseMeasuresTest(absltest.TestCase):
 
     def setUp(self):
         dense_measures.MAX_DAYS=None
@@ -91,4 +95,4 @@ class DenseMeasuresTest(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    absltest.main()
