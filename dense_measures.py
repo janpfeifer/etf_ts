@@ -81,22 +81,26 @@ def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[T
         filter(lambda x: x >= first_serial, list(serials_set)))
     if MAX_DAYS is not None:
         all_serials = all_serials[-MAX_DAYS:]
-    max_serial = all_serials[-1]
-    max_skip = _max_skip(np.array(all_serials), max_serial)
+    first_serial = all_serials[0]
+    last_serial = all_serials[-1]
+    max_skip = _max_skip(np.array(all_serials), first_serial, last_serial)
     logging.debug(f'Combined dataset from all assets max_skip={max_skip}')
 
     # Trim DataFrames to only the entries that we are interest in.
-    logging.info('  - limit only the days that matter and check max_skip of each symbol.')
+    logging.info(
+        '  - limit only the days that matter and check max_skip of each symbol.')
     limited_data = {}
     disabled_symbols = set()
     for symbol in ordered_symbols:
         df = data[symbol]
         df = df[df['Serial'].isin(all_serials)].reset_index(drop=True)
-        sym_max_skip = _max_skip(df['Serial'], max_serial)
+        sym_max_skip = _max_skip(df['Serial'], first_serial, last_serial)
         if sym_max_skip > MAX_ACCEPTABLE_SKIP:
             disabled_symbols.add(symbol)
-        print(f'{symbol}: max skip = {sym_max_skip} (max_skip={max_skip})')
+        logging.debug(f'{symbol}: max skip = {sym_max_skip} (max_skip={max_skip})')
         limited_data[symbol] = df
+    data_manager.log_symbols('disabled_symbols', list(disabled_symbols))
+    data_manager.log_symbols('Remaining valid', list(disabled_symbols))
 
     # Join by key 'Serial', one symbol at a time.
     logging.info('  - Join all_serials with each assets dataset.')
@@ -112,7 +116,7 @@ def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[T
         logging.info(f'    Gathering data for {field}')
         field_to_ndarray[field] = np.stack([
             np.nan_to_num(limited_data[symbol][field].values)
-            for symbol in ordered_symbols], 
+            for symbol in ordered_symbols],
             axis=1)
 
     # Generate mask.
@@ -123,17 +127,19 @@ def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[T
             mask_parts.append(mask_false)
         else:
             mask_parts.append(
-                [isinstance(v, str) 
-                for v in limited_data[symbol]['Date'].values])
+                [isinstance(v, str)
+                 for v in limited_data[symbol]['Date'].values])
     mask = np.stack(mask_parts, axis=1)
     return field_to_ndarray, mask, all_serials
 
 
-def _max_skip(serials: np.ndarray, last_serial:int) -> int:
+def _max_skip(serials: np.ndarray, first_serial: int, last_serial: int) -> int:
+    if serials.size == 0:
+        return last_serial - first_serial + 1
     next = np.roll(serials, -1)
     next[-1] = last_serial
     diff = next - serials
-    return np.amax(diff)
+    return max(np.amax(diff), serials[0] - first_serial)
 
 
 def _FindActive(data: Dict[Text, pd.DataFrame], ordered_symbols: List[Text],

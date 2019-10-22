@@ -123,6 +123,8 @@ YAHOO_SKIP_SYMBOLS = set([
 
     'VFORX',
 
+    'TSWE.SW', 'TGBT.SW', 'TEET.SW', 'TRET.SW', 'TCBT.SW', 'TNAE.SW', 'TDIV.SW', 'VAAA.SW', 'TGET.SW'
+
 ])
 
 WTD_SKIP_SYMBOLS = set([
