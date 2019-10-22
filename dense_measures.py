@@ -111,7 +111,8 @@ def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[T
     for field in config.FIELDS_FOR_TENSORFLOW:
         logging.info(f'    Gathering data for {field}')
         field_to_ndarray[field] = np.stack([
-            limited_data[symbol][field].values for symbol in ordered_symbols],
+            np.nan_to_num(limited_data[symbol][field].values)
+            for symbol in ordered_symbols], 
             axis=1)
 
     # Generate mask.

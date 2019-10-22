@@ -92,6 +92,7 @@ class DenseMeasuresTest(absltest.TestCase):
         # print(f'dense={dense}')
         for field in dense.keys():
             self.assertEqual(dense[field].shape, (12 , 3))
+            self.assertFalse(np.any(np.isnan(dense[field])))
 
 
 if __name__ == '__main__':
