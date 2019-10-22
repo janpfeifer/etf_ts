@@ -81,7 +81,8 @@ TICKERS = [
     #'ZGLD',  # ZKB Gold ETF AA CHF Klasse (SWX)
     #'ZPAL',  # ZKB ZKB Palladium ETF (SWX)
     'SGLD.L',  # SRC PH/ASST BKD 21001231 SER -> SGOL equivalent
-    'GLDU.AS', # Also available in London, but data available only for the Amsterdam.
+    # Also available in London, but data available only for the Amsterdam.
+    'GLDU.AS',
 
     #================================================================================================
     # Bonds
@@ -243,7 +244,7 @@ SPREAD_DIVIDENDS = 1 * YEARLY_PERIOD_IN_SERIAL
 # 'VFMV', 'VFVA'
 
 # Period we report.
-REPORT_PERIOD_YEARS = 10
+REPORT_PERIOD_YEARS = 6
 REPORT_PERIOD = REPORT_PERIOD_YEARS * YEARLY_PERIOD_IN_SERIAL
 
 # Mix strategy constants:

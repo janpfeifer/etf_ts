@@ -224,6 +224,9 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
     for last_ii_year in range(config.REPORT_PERIOD // apply_cycles):
         # Identify range where to apply new mix.
         apply_start = (-last_ii_year - 1) * apply_cycles
+        if apply_start + len(all_serials) <= 0:
+            logging.info('Not enough data, stopping mix here.')
+            break
         apply_start_date = asset_measures.SerialDateToString(
             all_serials[apply_start])
         apply_end = -last_ii_year * apply_cycles
@@ -242,6 +245,10 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
         train_end = apply_start
         train_start = train_end - \
             int(config.YEARLY_PERIOD_IN_SERIAL * FLAGS.mix_training_period)
+        if train_start + len(all_serials) <= 0:
+            logging.info('Not enough data, stopping mix here.')
+            break
+        print(f'train_start={train_start}, len(all_serials)={len(all_serials)}')
         train_gains = log_gains[train_start:train_end, :]
         # print(f'gains.shape={log_gains.shape}, train_gains.shape={train_gains.shape}')
         train_mask = mask[train_start:train_end, :]
