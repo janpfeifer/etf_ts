@@ -245,10 +245,14 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
         train_gains = log_gains[train_start:train_end, :]
         # print(f'gains.shape={log_gains.shape}, train_gains.shape={train_gains.shape}')
         train_mask = mask[train_start:train_end, :]
+        train_serials = all_serials[train_start:train_end]
         # print(f'mask.shape={mask.shape}, train_mask.shape={train_mask.shape}')
 
         # Train and find mix.
-        symbols_used = tf.reduce_any(train_mask, axis=0)
+        # print(f'train_serials={train_serials}')
+        # print(f'train_mask={train_mask}')
+        symbols_used = tf.constant(dense_measures.SelectSymbolsFromMask(
+            train_serials, train_mask), dtype=tf.bool)
         # print(f'symbols_used={symbols_used.numpy()}')
 
         (mix_gain, adjusted_mix_gain, mix_logits, mix) = (
@@ -259,7 +263,7 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
 
         # Apply mix to apply gains.
         mix_gain, adjusted_mix_gain = optimizations.mix_gain(
-            mix_logits, symbols_used, apply_gains, FLAGS.loss_cost)
+            mix_logits, symbols_used, apply_gains, FLAGS.loss_cost, FLAGS.gain_power)
         mix_gain = optimizations.annualized_gain(mix_gain, apply_cycles)
         adjusted_mix_gain = optimizations.annualized_gain(
             adjusted_mix_gain, apply_cycles)
@@ -312,7 +316,9 @@ def assets_selection(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf
                        FLAGS.mix_training_period)
     train_gains = log_gains[-train_cycles:, :]
     train_mask = mask[-train_cycles:, :]
-    symbols_used = tf.reduce_any(train_mask, axis=0)
+    train_serials = all_serials[-train_cycles:]
+    symbols_used = tf.constant(dense_measures.SelectSymbolsFromMask(
+        train_serials, train_mask), dtype=tf.bool)
     (mix_gain, adjusted_mix_gain, mix_logits, mix) = (
         optimizations.optimize_mix(symbols, symbols_used, train_gains, hparams))
     selection = _normalize_selection(symbols, mix_logits, symbols_used)

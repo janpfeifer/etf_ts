@@ -29,7 +29,8 @@ class AssetMeasuresTest(unittest.TestCase):
 
         self.dividends_ = pd.DataFrame([
             { 'Date': '2019-01-01', 'Amount': 0.3 },  # On day that asset is negotiated.
-            { 'Date': '2019-01-06', 'Amount': 0.5 },  # On off-day.
+            { 'Date': '2019-01-05', 'Amount': 0.4 },  # On off-day.
+            { 'Date': '2019-01-06', 'Amount': 0.1 },  # On off-day again.
         ])
 
     def test_mix_gain(self):

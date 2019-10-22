@@ -13,9 +13,6 @@ import dense_measures
 class DenseMeasuresTest(absltest.TestCase):
 
     def setUp(self):
-        dense_measures.MAX_DAYS=None
-        dense_measures.MAX_ACCEPTABLE_SKIP=10
-
         data = [
             {'Date': '2019-01-01', 'Open': 10.0, 'Close': 11.0,
                 'High': 11.5, 'Low': 9.9, 'Volume': 100},
@@ -69,30 +66,51 @@ class DenseMeasuresTest(absltest.TestCase):
         self.data_ = data
 
     def test_DenseMeasureMatrices(self):
+        dense_measures.MAX_DAYS = None
         symbols = sorted(list(self.data_.keys()))
-        print(f'Inputs: {symbols}')
+        logging.debug(f'Inputs: {symbols}')
         for symbol in symbols:
-            print(f'\n  {symbol}:')
-            print(self.data_[symbol])
+            logging.debug(f'\n  {symbol}:')
+            logging.debug(self.data_[symbol])
 
         dense, mask, serials = dense_measures.DenseMeasureMatrices(
             self.data_, symbols)
 
-        print(f'mask={mask}')
+        logging.debug(f'mask={mask}')
         mask = np.array(mask, np.bool)
         self.assertTrue(np.all(mask[:, 0]),
                         'base dataset must all be included.')
         self.assertTrue(np.all(mask[:11, 1]),
-                        'base_p1 dataset, only first 8 are included.')
+                        'base_p1 dataset, only first 11 are included.')
         self.assertTrue(np.all(~mask[11:, 1]),
-                        'base_p1 dataset, only first 8 are included.')
-        self.assertTrue(np.all(~mask[:, 2]),
-                        'base_p2 dataset should have been masked out, because of large skip window.')
+                        'base_p1 dataset, only first 11 are included.')
+        self.assertTrue(np.all(mask[:4, 2]),
+                        'base_p2 dataset has values for 0:4 and 8:12')
+        self.assertTrue(np.all(~mask[4:8, 2]),
+                        'base_p2 dataset has values for 0:4 and 8:12')
+        self.assertTrue(np.all(mask[8:, 2]),
+                        'base_p2 dataset has values for 0:4 and 8:12')
 
         # print(f'dense={dense}')
         for field in dense.keys():
-            self.assertEqual(dense[field].shape, (12 , 3))
+            self.assertEqual(dense[field].shape, (12, 3))
             self.assertFalse(np.any(np.isnan(dense[field])))
+
+    def test_SelectSymbolsFromMask(self):
+        dense_measures.MAX_ACCEPTABLE_SKIP = 7
+        serials = np.array([10, 11, 14, 18, 19])
+        mask = np.array([
+            [True, False, True],
+            [True, False, True],
+            [True, True, False],
+            [True, True, False],
+            [False, True, True],
+        ], dtype=bool)
+        select_from = dense_measures.SelectSymbolsFromMask(serials, mask)
+
+        # Column 2 skips from serial 11 to 19, that is > 7, hence should be false.
+        # Others should be all selected.
+        self.assertEqual(select_from, [True, True, False])
 
 
 if __name__ == '__main__':

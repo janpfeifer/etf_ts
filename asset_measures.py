@@ -65,30 +65,38 @@ def _merge_dividends(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
 
     if merged_df['Close'].isna().any():
         # Move date of dividends to the previous market day.
-        logging.info(f'Asset {symbol} has dividend paid on day without an Open value, then the merge is slower.')
+        logging.debug(f'Asset {symbol} has dividend paid on day without an Open value, then the merge is slower.')
         valid_serials = set(df['Serial'].tolist())
-        new_dividends = []
+        new_dividends = {}
         for _, row in dividends.iterrows():
-            serial = row['Serial']
+            serial = int(row['Serial'])
             amount = row['Dividends']
             if serial in valid_serials:
-                new_dividends.append({'Serial': serial, 'Dividends': amount})
+                if serial in new_dividends:
+                    new_dividends[serial] += amount
+                else:
+                    new_dividends[serial] = amount
             else:
                 # Search for a replacind serial for up to a month before.
                 date = SerialDateToString(int(serial))
-                new_serial = -1
+                found = False
                 for ii in range(config.MONTHLY_PERIOD_IN_SERIAL):
                     new_serial = int(serial - ii - 1)
                     if new_serial in valid_serials:
                         new_date = SerialDateToString(new_serial)
-                        new_dividends.append(
-                            {'Serial': new_serial, 'Dividends': amount})
+                        if new_serial in new_dividends:
+                            new_dividends[new_serial] += amount
+                        else:
+                            new_dividends[new_serial] = amount
                         logging.info(f'Missing marked for dividend on {date} (serial={serial}), moved to {new_date} instead')
+                        found = True
                         break
-                if new_serial == -1:
+                if not found:
                     raise ValueError(f'Missing marked for dividend on {date} (serial={serial}), no alternative date found.')
         if new_dividends:
-            dividends = pd.DataFrame(new_dividends)
+            sorted_keys = sorted(new_dividends.keys())
+            dividends = pd.DataFrame(
+                {'Serial': sorted_keys, 'Dividends': [new_dividends[k] for k in sorted_keys]})
             merged_df = pd.merge(df, dividends, on='Serial', how='outer')
         else:
             df['Dividends'] = np.zeros_like(df['Close'], dtype=np.float)
@@ -103,7 +111,8 @@ def _merge_dividends(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
     for idx in range(dividends.size):
         if dividends[idx] > 0.0:
             fraction = float(dividends[idx]) / float(config.SPREAD_DIVIDENDS)
-            spread[min(0, idx - config.SPREAD_DIVIDENDS + 1)                   : idx + 1] += fraction
+            spread[min(0, idx - config.SPREAD_DIVIDENDS + 1)
+                       : idx + 1] += fraction
             if idx > dividends.size - config.SPREAD_DIVIDENDS:
                 # Assume similar dividends will be paid next cycle: likely a better
                 # assumption than no dividend will be paid.
@@ -115,6 +124,7 @@ def _merge_dividends(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
 
 def AddDerivedValues(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol: str) -> pd.DataFrame:
     """Add some standard derived values to dataframe."""
+    df = df.drop_duplicates(subset='Date', keep='last').reset_index(drop=True)
     df['Serial'] = df['Date'].apply(StringDateToSerial)
     df = _merge_dividends(df, dividends, symbol)
 
@@ -140,9 +150,9 @@ def AddDerivedValues(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
     next_open[-1] = close[-1]
     daily_gain = next_open - _open
     df['DailyValuation'] = daily_gain
-    logging.info('Sum Valuation={}'.format(np.sum(daily_gain)))
+    logging.debug('Sum Valuation={}'.format(np.sum(daily_gain)))
     daily_gain = daily_gain + df['Dividends']
-    logging.info('Sum Gains={}'.format(np.sum(daily_gain)))
+    logging.debug('Sum Gains={}'.format(np.sum(daily_gain)))
     df['DailyGain'] = daily_gain
     df['PctDailyGain'] = 100.0 * daily_gain / _open
     df['LogDailyGain'] = np.log((_open + daily_gain) / _open)

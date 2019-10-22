@@ -73,6 +73,9 @@ def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[T
     serials_set = set()  # type: Set[int]
     for symbol in ordered_symbols:
         serials = set(data[symbol]['Serial'])
+        if len(serials) != data[symbol]['Serial'].size:
+            logging.error(f'*** Asset {symbol} has repeated date entries.')
+            raise ValueError(f'*** Asset {symbol} has repeated date entries.')
         if serials_set is None:
             serials_set = serials
         else:
@@ -81,33 +84,22 @@ def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[T
         filter(lambda x: x >= first_serial, list(serials_set)))
     if MAX_DAYS is not None:
         all_serials = all_serials[-MAX_DAYS:]
-    first_serial = all_serials[0]
-    last_serial = all_serials[-1]
-    max_skip = _max_skip(np.array(all_serials), first_serial, last_serial)
-    logging.debug(f'Combined dataset from all assets max_skip={max_skip}')
 
     # Trim DataFrames to only the entries that we are interest in.
     logging.info(
         '  - limit only the days that matter and check max_skip of each symbol.')
     limited_data = {}
-    disabled_symbols = set()
     for symbol in ordered_symbols:
         df = data[symbol]
         df = df[df['Serial'].isin(all_serials)].reset_index(drop=True)
-        sym_max_skip = _max_skip(df['Serial'], first_serial, last_serial)
-        if sym_max_skip > MAX_ACCEPTABLE_SKIP:
-            disabled_symbols.add(symbol)
-        logging.debug(f'{symbol}: max skip = {sym_max_skip} (max_skip={max_skip})')
         limited_data[symbol] = df
-    data_manager.log_symbols('disabled_symbols', list(disabled_symbols))
-    data_manager.log_symbols('Remaining valid', list(disabled_symbols))
 
     # Join by key 'Serial', one symbol at a time.
-    logging.info('  - Join all_serials with each assets dataset.')
     all_serials_df = pd.DataFrame({'Serial': all_serials})
+    logging.info(f'  - Join all_serials with each assets dataset ({all_serials_df["Serial"].size} entries).')
     for symbol in ordered_symbols:
         limited_data[symbol] = pd.merge(
-            all_serials_df, limited_data[symbol], on='Serial', how='outer')
+            all_serials_df.copy(), limited_data[symbol], on='Serial', how='outer')
 
     # Collect dense matrices, one per field.
     logging.info(f'  - Gathering dense matrices for each field')
@@ -123,23 +115,42 @@ def DenseMeasureMatrices(data: Dict[Text, pd.DataFrame], ordered_symbols: List[T
     mask_parts = []
     mask_false = np.zeros_like(all_serials, dtype=np.bool)
     for symbol in ordered_symbols:
-        if symbol in disabled_symbols:
-            mask_parts.append(mask_false)
-        else:
-            mask_parts.append(
-                [isinstance(v, str)
-                 for v in limited_data[symbol]['Date'].values])
+        mask_parts.append(
+            [isinstance(v, str)
+             for v in limited_data[symbol]['Date'].values])
     mask = np.stack(mask_parts, axis=1)
     return field_to_ndarray, mask, all_serials
 
 
-def _max_skip(serials: np.ndarray, first_serial: int, last_serial: int) -> int:
-    if serials.size == 0:
-        return last_serial - first_serial + 1
-    next = np.roll(serials, -1)
-    next[-1] = last_serial
-    diff = next - serials
-    return max(np.amax(diff), serials[0] - first_serial)
+def SelectSymbolsFromMask(serials: List, mask: np.ndarray) -> np.ndarray:
+    """Select symbols from mask (typically a range of it).
+
+    Args:
+      serials: 1D-array (int64) with the range of serials (serialized date) used.
+      mask: 2D-array (bool), shape [symbols, serials], representing which symbol has information
+        for the given serial.
+
+    Returns:
+      1D-array (bool) with the symbols valid for use -- that is, without any large
+         missing chunks of data -- controlled by MAX_ACCEPTABLE_SKIP.
+    """
+    if len(serials) == 0:
+        return np.zeros_like(mask, dtype=bool)
+    first_serial = serials[0]
+    last_serial = serials[-1]
+    syms_valid = []
+    serials = np.array(serials)
+    for col in range(mask.shape[1]):
+        sym_serials = serials[mask[:, col]]
+        if sym_serials.size == 0:
+            syms_valid.append(False)
+            continue
+        next = np.roll(sym_serials, -1)
+        next[-1] = last_serial
+        diff = next - sym_serials
+        syms_valid.append(
+            max(np.amax(diff), sym_serials[0] - first_serial) <= MAX_ACCEPTABLE_SKIP)
+    return syms_valid
 
 
 def _FindActive(data: Dict[Text, pd.DataFrame], ordered_symbols: List[Text],
