@@ -92,7 +92,7 @@ def _merge_dividends(df: pd.DataFrame, dividends: Optional[pd.DataFrame], symbol
                         found = True
                         break
                 if not found:
-                    raise ValueError(f'Missing marked for dividend on {date} (serial={serial}), no alternative date found.')
+                    logging.error(f'Dividend for {symbol} on {date} (serial={serial}): no alternative date found!? Dropping entry.')
         if new_dividends:
             sorted_keys = sorted(new_dividends.keys())
             dividends = pd.DataFrame(
