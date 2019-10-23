@@ -96,13 +96,15 @@ def extract_ib_symbols(base_dir: Text, max_age_days: int= 30) -> List[Text]:
     for source in INTERACTIVE_BROKERS_SOURCES:
         df = _extract_symbols_from_source(
             source['url'], base_dir, max_age_days)
-        df_symbols, df_ib_symbols, df_descriptions = (
+        df_symbols, df_ib_symbols, df_descriptions, df_currencies = (
             df['Symbol'], df['IB Symbol'],
-            df['Fund Description (Click link for more details)'])
+            df['Fund Description (Click link for more details)'],
+            df['Currency'])
         for ii in df.index:
             symbol = df_symbols[ii]
             ib_symbol = df_ib_symbols[ii]
-            description = df_descriptions[ii]
+            currency = df_currencies[ii]
+            description = df_descriptions[ii] + ' (' + currency + ')'
             if symbol[-3:] in CURRENCIES:
                 symbol = symbol[: -3]
             if symbol in raw_symbols:
@@ -115,7 +117,7 @@ def extract_ib_symbols(base_dir: Text, max_age_days: int= 30) -> List[Text]:
             SYMBOL_TO_INFO[symbol_ex] = {
                 'ib_symbol': ib_symbol,
                 'description': description,
-            }
+                'currency': currency}
 
     # Arbitrary selection of symbols: both ETF and stocks.
     for symbol in config.TICKERS:
@@ -124,6 +126,7 @@ def extract_ib_symbols(base_dir: Text, max_age_days: int= 30) -> List[Text]:
             SYMBOL_TO_INFO[symbol] = {
                 'ib_symbol': '?',
                 'description': 'Manually selected.',
+                'currency': '?'
             }
 
     return sorted(list(symbols))

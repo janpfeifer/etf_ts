@@ -124,6 +124,7 @@ YAHOO_SKIP_SYMBOLS = set([
     'VFORX',
 
     'TSWE.SW', 'TGBT.SW', 'TEET.SW', 'TRET.SW', 'TCBT.SW', 'TNAE.SW', 'TDIV.SW', 'VAAA.SW', 'TGET.SW',
+    'MKUW.L', 'GLRA.L', 'EGOV.L', 'XZEM.L', 'CHGB.L',
 
     # Broken
     'SMICHA.SW',
@@ -147,13 +148,15 @@ class DataManager:
 
     self._wtd_available_symbols = set()
     for file_name in WTD_SYMBOLS_FILES:
+      logging.info(f'Reading {file_name} with list of assets held in WorldTradingData.')
       p = '{}/{}'.format(base_path, file_name)
       df = pd.read_csv(p)
       for _, row in df.iterrows():
         self._wtd_available_symbols.add(row['Symbol'])
+        currency = row['Currency'] if 'Currency' in row else 'USD'
         config_ib.SYMBOL_TO_INFO[row['Symbol']] = {
-            'description': row['Name'],
-            'currency': row['Currency'] if 'Currency' in row else 'USD',
+            'description': f'{row["Name"]} ({currency})',
+            'currency': currency,
         }
 
   @property
@@ -281,7 +284,7 @@ class DataManager:
       # Reset index so it properly is a range from 0 to len(df)-1
       df = df.reset_index(drop=True)
 
-      # Drastic change in values are still likely wrong (there are so much of this
+    # Drastic change in values are still likely wrong (there are so much of this
     # broken data ...)
     if 'Open' in df and df['Open'].shape[0] > 20:
       open_v = df['Open'].values
@@ -292,7 +295,8 @@ class DataManager:
         dates = []
         for idx in np.where(open_changes):
           dates.append(df['Date'][idx].iat[0])
-        logging.info(f'There is a skip of prices in {symbol}: in dates {dates}')
+        logging.error(f'There is a skip of prices: \'{symbol}\': \'{dates}\'')
+        return False
 
     if len(df.index) < config.YEARLY_PERIOD_IN_SERIAL:
       return False
