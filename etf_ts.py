@@ -44,7 +44,7 @@ flags.DEFINE_integer('max_age_days', 10,
                      'Maximum number of days before updating cached data.')
 flags.DEFINE_list(
     'symbols', None,
-    'List of sBase path where to store historical marked data. Can be shared across models')
+    'List of symbols to use, as opposed to reading them from InteractiveBrokers selection.')
 flags.DEFINE_integer('symbols_max_count', 0,
                      'Used for testing. If >0 take the first --symbols_max_count symbols only.')
 flags.DEFINE_bool(
@@ -92,7 +92,12 @@ def main(argv):
     # Select and sort symbols.
     symbols = config_ib.extract_ib_symbols(FLAGS.data, FLAGS.max_age_days)
     if FLAGS.symbols is not None:
-        symbols = FLAGS.symbols
+        if FLAGS.symbols[0] != 'config':
+            symbols = FLAGS.symbols
+            logging.info(f'Symbols: {symbols}')
+        else:
+            logging.info('Using pre-selected list of assets to choose from.')
+            symbols = config.TICKERS
 
     # Download data or reload it from disk cache.
     dmgr = data_manager.DataManager(FLAGS.data)
@@ -279,7 +284,7 @@ def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text,
         all_adjusted_gains += tf.math.log(adjusted_mix_gain)
 
         # Report gain of period (in %age change)
-        print(f'mix_gain={mix_gain:.4f}, adjusted_mix_gain={adjusted_mix_gain:.4f}, apply_cycles={apply_cycles}')
+        logging.debug(f'mix_gain={mix_gain:.4f}, adjusted_mix_gain={adjusted_mix_gain:.4f}, apply_cycles={apply_cycles}')
         mix_gain = optimizations.annualized_gain(mix_gain, apply_cycles)
         mix_gain = 100.0 * (mix_gain - 1.0)
         adjusted_mix_gain = optimizations.annualized_gain(
