@@ -138,26 +138,28 @@ WTD_SKIP_SYMBOLS = set([
 class DataManager:
   """Manages download and cache of historical ticker data, using WorldTradingData.com"""
 
-  def __init__(self, base_path: str):
+  def __init__(self, base_path: str, load_wtd_symbols: bool = True):
     """Constructor, takes a WorldTradingData key and a base path where to store cached data."""
     self._base = base_path
     self._data: Dict[str, pd.DataFrame] = dict()
+    self._total_assets: Dict[str, Optional[float]] = dict()
     self._dividends: Dict[str, pd.DataFrame] = dict()
     with open('{}/{}'.format(base_path, WTD_API_KEY_FILE_NAME), 'r') as file:
       self._wtd_key = file.read().replace('\n', '')
 
     self._wtd_available_symbols = set()
-    for file_name in WTD_SYMBOLS_FILES:
-      logging.info(f'Reading {file_name} with list of assets held in WorldTradingData.')
-      p = '{}/{}'.format(base_path, file_name)
-      df = pd.read_csv(p)
-      for _, row in df.iterrows():
-        self._wtd_available_symbols.add(row['Symbol'])
-        currency = row['Currency'] if 'Currency' in row else 'USD'
-        config_ib.SYMBOL_TO_INFO[row['Symbol']] = {
-            'description': f'{row["Name"]} ({currency})',
-            'currency': currency,
-        }
+    if load_wtd_symbols:
+      for file_name in WTD_SYMBOLS_FILES:
+        logging.info(f'Reading {file_name} with list of assets held in WorldTradingData.')
+        p = '{}/{}'.format(base_path, file_name)
+        df = pd.read_csv(p)
+        for _, row in df.iterrows():
+          self._wtd_available_symbols.add(row['Symbol'])
+          currency = row['Currency'] if 'Currency' in row else 'USD'
+          config_ib.SYMBOL_TO_INFO[row['Symbol']] = {
+              'description': f'{row["Name"]} ({currency})',
+              'currency': currency,
+          }
 
   @property
   def base(self):
@@ -165,14 +167,20 @@ class DataManager:
     return self._base
 
   @property
-  def data(self):
+  def data(self) -> Dict[str, pd.DataFrame]:
     """Returns a dictionary of symobl name to Pandas DataFrame with all data downloaded so far."""
     return self._data
 
   @property
-  def dividends(self):
+  def dividends(self) -> Dict[str, pd.DataFrame]:
     """Returns a dictionary of symobl name to Pandas DataFrame with dividends information."""
     return self._dividends
+
+  @property
+  def total_assets(self) -> Dict[str, Optional[float]]:
+    """Returns lastest update on total assets for ETFs (or None for non-ETFs, or ETFs with missing infromation)."""
+    return self._total_assets
+
 
   def PathForRawData(self, symbol: str) -> str:
     """Creates returns directory for symbol."""
@@ -226,13 +234,13 @@ class DataManager:
     return csv_data
 
   def _DownloadDividendsCSVFromYahooFinance(self, symbols: List[Text]) -> List[Optional[Text]]:
-    log_symbols('Loading dividends', symbols)
     csv_data = []
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    all_assets = YahooFinancials(symbols)
+    all_dividends = all_assets.get_daily_dividend_data(
+        start_date=config.DEFAULT_MIN_DATE, end_date=today)
     for symbol in symbols:
-      asset = YahooFinancials(symbol)
-      today = datetime.datetime.now().strftime("%Y-%m-%d")
-      dividends = asset.get_daily_dividend_data(
-          start_date=config.DEFAULT_MIN_DATE, end_date=today)[symbol]
+      dividends = all_dividends[symbol]
       if dividends is None:
         csv_data.append(None)
         continue
@@ -243,6 +251,20 @@ class DataManager:
         lines.append(f'{e["formatted_date"]},{e["amount"]}')
       lines.append('')  # This will add a last line break.
       csv_data.append("\n".join(lines))
+    return csv_data
+
+  def _DownloadTotalAssetsFromYahooFinance(self, symbols: List[Text]) -> List[Optional[Text]]:
+    csv_data = []
+    assets = YahooFinancials(symbols)
+    summaries = assets.get_summary_data()
+    for symbol in symbols:
+      today = datetime.datetime.now().strftime("%Y-%m-%d")
+      if symbol in summaries and 'totalAssets' in summaries[symbol] and summaries[symbol]['totalAssets'] is not None: 
+        lines = ['Date,Amount']  # Header
+        total_assets = summaries[symbol]['totalAssets']
+        csv_data.append(f'Date,TotalAssets\n{today},{total_assets}\n')
+      else:
+        csv_data.append(None)
     return csv_data
 
   def _LoadData(self, symbol: Text) -> bool:
@@ -300,12 +322,24 @@ class DataManager:
 
     if len(df.index) < config.YEARLY_PERIOD_IN_SERIAL:
       return False
+
+
+    # Load dividends.
     self._data[symbol] = df
     if os.path.isfile(p + '/dividends.csv'):
       dividends = pd.read_csv(p + '/dividends.csv')
     else:
       dividends = None
     self._dividends[symbol] = dividends
+
+    # Load total assets
+    fp = p + '/total_assets.csv'
+    if os.path.isfile(fp):
+      total_assets = float(pd.read_csv(fp)['TotalAssets'][0])
+    else:
+      total_assets = None
+    self._total_assets[symbol] = total_assets
+
     return True
 
   def DownloadRawData(self, symbol: Text, max_age_days: int=30) -> bool:
@@ -395,12 +429,22 @@ class DataManager:
     need_downloading = [
         symbol for symbol in need_downloading if symbol not in failed_symbols]
     if need_downloading:
-      all_csv = self._DownloadDividendsCSVFromYahooFinance(need_downloading)
+      log_symbols('Downloading dividends from Yahoo', wtd_symbols)
+      all_dividends = self._DownloadDividendsCSVFromYahooFinance(need_downloading)
       for (ii, symbol) in enumerate(need_downloading):
-        csv = all_csv[ii]
+        csv = all_dividends[ii]
         if csv is not None:
           p = self.PathForRawData(symbol)
           with open(p + '/dividends.csv', 'w') as f:
+            f.write(csv)
+
+      log_symbols('Downloading total assets from Yahoo', wtd_symbols)
+      all_assets = self._DownloadTotalAssetsFromYahooFinance(need_downloading)
+      for (ii, symbol) in enumerate(need_downloading):
+        csv = all_assets[ii]
+        if csv is not None:
+          p = self.PathForRawData(symbol)
+          with open(p + '/total_assets.csv', 'w') as f:
             f.write(csv)
 
     # Save timestamp.
