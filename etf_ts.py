@@ -25,7 +25,7 @@ from absl import logging
 import sys
 import numpy as np
 import tensorflow as tf
-from typing import Dict, List, Text, Tuple
+from typing import Dict, List, Optional, Text, Tuple
 
 import asset_measures
 import config
@@ -90,14 +90,7 @@ def main(argv):
     dense_measures.MAX_DAYS = FLAGS.max_days
 
     # Select and sort symbols.
-    symbols = config_ib.extract_ib_symbols(FLAGS.data, FLAGS.max_age_days)
-    if FLAGS.symbols is not None:
-        if FLAGS.symbols[0] != 'config':
-            symbols = FLAGS.symbols
-            logging.info(f'Symbols: {symbols}')
-        else:
-            logging.info('Using pre-selected list of assets to choose from.')
-            symbols = config.TICKERS
+    symbols = _get_symbols(FLAGS.symbols)
 
     # Download data or reload it from disk cache.
     dmgr = data_manager.DataManager(FLAGS.data)
@@ -136,6 +129,22 @@ def main(argv):
     if 'selection' in FLAGS.stats:
         assets_selection(symbols, mask, fields, all_serials)
 
+
+def _get_symbols(selection: Optional[List[Text]]) -> List[Text]:
+    symbols = config_ib.extract_ib_symbols(FLAGS.data, FLAGS.max_age_days)
+    if selection is not None:
+        if selection[0] == 'config':
+            logging.info('Using pre-selected list of assets to choose from.')
+            symbols = config.TICKERS
+        elif selection[0] == 'vanguard':
+            filtered = []
+            for symbol in symbols:
+                if config_ib.SYMBOL_TO_INFO[symbol]['description'].lower().find('vanguard') >= 0:
+                    filtered.append(symbol)
+            symbols = filtered
+        else:
+            logging.info(f'Symbols: {symbols}')
+    return symbols
 
 def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor]) -> None:
     """Print basic assets data (CSV) and per assets gains and adjusted gains."""
