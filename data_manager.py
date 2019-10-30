@@ -154,12 +154,14 @@ class DataManager:
         p = '{}/{}'.format(base_path, file_name)
         df = pd.read_csv(p)
         for _, row in df.iterrows():
-          self._wtd_available_symbols.add(row['Symbol'])
+          symbol = row['Symbol']
+          self._wtd_available_symbols.add(symbol)
           currency = row['Currency'] if 'Currency' in row else 'USD'
-          config_ib.SYMBOL_TO_INFO[row['Symbol']] = {
-              'description': f'{row["Name"]} ({currency})',
-              'currency': currency,
-          }
+          if symbol not in config_ib.SYMBOL_TO_INFO: 
+            config_ib.SYMBOL_TO_INFO[row['Symbol']] = {
+                'description': row["Name"],
+                'currency': currency,
+            }
 
   @property
   def base(self):
