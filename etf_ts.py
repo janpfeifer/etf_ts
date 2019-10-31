@@ -81,6 +81,11 @@ flags.DEFINE_integer(
     'max_days', None,
     'If set, look at most at the latest given number of days. Otherwise look at everything.')
 
+flags.DEFINE_bool(
+    'include_us', False,
+    'If true include US ETFs: they wont be available for Swiss residents starting on 1/1/2020')
+
+
 
 def main(argv):
     del argv  # Unused.
@@ -132,6 +137,8 @@ def main(argv):
 
 
 def _get_symbols(selection: Optional[List[Text]]) -> List[Text]:
+    if not FLAGS.include_us:
+        config_ib.exclude_us_etfs()
     symbols = config_ib.extract_ib_symbols(FLAGS.data, FLAGS.max_age_days)
     if selection is not None:
         if selection[0] == 'config':

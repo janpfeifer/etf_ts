@@ -35,6 +35,26 @@ INTERACTIVE_BROKERS_SOURCES = [
         'suffix': 'L',
         'url': 'https://www.interactivebrokers.com/en/index.php?f=567&exch=lse',
     },
+
+    # The following won't be available for Swiss Residents starting on 1/1/2020, according to
+    # https://thepoorswiss.com/swiss-investors-lose-access-us-domiciled-etfs/ 
+    #
+    # See exclude_us_etfs() below.
+    {
+        # NYSE Arca
+        'suffix': None,
+        'url': 'https://www.interactivebrokers.com/en/index.php?f=567&exch=arca',
+    },
+    {
+        # NYSE American (AMEX)
+        'suffix': None,
+        'url': 'https://www.interactivebrokers.com/en/index.php?f=567&exch=amex',
+    },
+    {
+        # NASDAQ OMX BX (BEX)
+        'suffix': None,
+        'url': 'https://www.interactivebrokers.com/en/index.php?f=567&exch=bex'
+    },
 ]
 
 
@@ -87,6 +107,12 @@ SKIP_SYMBOLS = ([
 SYMBOL_TO_INFO = {}
 
 
+def exclude_us_etfs() -> None:
+    """Call this before extract_ib_symbols, to exclude US based ETFs"""
+    global INTERACTIVE_BROKERS_SOURCES
+    INTERACTIVE_BROKERS_SOURCES = INTERACTIVE_BROKERS_SOURCES[:3]
+
+
 def extract_ib_symbols(base_dir: Text, max_age_days: int= 30) -> List[Text]:
     # Get list of ETFs from IB published lists.
     symbols = set()
@@ -109,7 +135,10 @@ def extract_ib_symbols(base_dir: Text, max_age_days: int= 30) -> List[Text]:
                 symbol = symbol[: -3]
             if symbol in raw_symbols:
                 continue
-            symbol_ex = symbol + '.' + source['suffix']
+            if source['suffix']:
+                symbol_ex = symbol + '.' + source['suffix']
+            else:
+                symbol_ex = symbol
             if symbol_ex in SKIP_SYMBOLS:
                 continue
             symbols.add(symbol_ex)
