@@ -427,11 +427,11 @@ class DataManager:
           with open(p + '/data.csv', 'w') as f:
             f.write(csv)
 
-    # Download dividends.
+    # Download dividends and total assets.
     need_downloading = [
         symbol for symbol in need_downloading if symbol not in failed_symbols]
     if need_downloading:
-      log_symbols('Downloading dividends from Yahoo', wtd_symbols)
+      log_symbols('Downloading dividends from Yahoo', need_downloading)
       all_dividends = self._DownloadDividendsCSVFromYahooFinance(need_downloading)
       for (ii, symbol) in enumerate(need_downloading):
         csv = all_dividends[ii]
@@ -440,8 +440,9 @@ class DataManager:
           with open(p + '/dividends.csv', 'w') as f:
             f.write(csv)
 
-      log_symbols('Downloading total assets from Yahoo', wtd_symbols)
+      log_symbols('Downloading total assets from Yahoo', need_downloading)
       all_assets = self._DownloadTotalAssetsFromYahooFinance(need_downloading)
+      log_symbols('  . Writing results to disk:', need_downloading)
       for (ii, symbol) in enumerate(need_downloading):
         csv = all_assets[ii]
         if csv is not None:
