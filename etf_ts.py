@@ -85,7 +85,10 @@ flags.DEFINE_bool(
     'include_us', False,
     'If true include US ETFs: they wont be available for Swiss residents starting on 1/1/2020')
 
-
+flags.DEFINE_integer(
+    'batch_size', None,
+    'If set, it will try to download asset information in batches. This is useful to detect bugs '
+    'in downloading.')
 
 def main(argv):
     del argv  # Unused.
@@ -100,8 +103,19 @@ def main(argv):
 
     # Download data or reload it from disk cache.
     dmgr = data_manager.DataManager(FLAGS.data)
-    symbols = dmgr.DownloadRawDataForList(
-        symbols, max_age_days=FLAGS.max_age_days)
+    if not FLAGS.batch_size:
+        symbols = dmgr.DownloadRawDataForList(
+            symbols, max_age_days=FLAGS.max_age_days)
+    else:
+        n = FLAGS.batch_size
+        batches = [
+            symbols[ii * n:(ii + 1) * n] 
+            for ii in range((len(symbols) + n - 1) // n )]
+        symbols = []
+        for ii, batch in enumerate(batches):
+            print(f'\n(Down)Loading data for {batch} (batch {ii} out of {len(batches)})')
+            symbols = symbols + dmgr.DownloadRawDataForList(
+                batch, max_age_days=FLAGS.max_age_days)
 
     # Calculate independent (from each other) derived information if not loaded from cache.
     num_symbols = len(symbols)
@@ -122,7 +136,7 @@ def main(argv):
         fields['LogDailyGain'], FLAGS.loss_cost, FLAGS.gain_power)
 
     # Get total assets and mask for only symbols with total_assets.
-    total_assets, total_assets_mask = _get_total_assets(dmgr, symbols, mask)
+    total_assets = _get_total_assets(dmgr, symbols, mask)
 
     # Print out gains for each symbol.
     # Header of all outputs.
@@ -130,7 +144,7 @@ def main(argv):
     if 'average' in FLAGS.stats:
         average(symbols, mask, fields)
     if 'commons' in FLAGS.stats:
-        average(symbols, total_assets_mask, fields, total_assets = total_assets)
+        average(symbols, mask, fields, total_assets = total_assets)
     # if 'greedy' in FLAGS.stats:
     #     greedy(symbols, mask, fields)
     if 'mix' in FLAGS.stats:
@@ -162,24 +176,15 @@ def _get_symbols(selection: Optional[List[Text]]) -> List[Text]:
 
 
 def _get_total_assets(dmgr: data_manager.DataManager, symbols: List[Text], 
-                      mask: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
-    """Returns total assets and mask of symbols with total assets available.
-
-    Returns: Tuple of:
-        * tensor shaped `[len(symbols)]` with values of total assets per
-          symbol, or 0 for those missing.
-        * tensor shaped like mask, with symbols completely disabled if they
-          don't have total assets.
-    """
+                      mask: tf.Tensor) -> tf.Tensor:
+    """Returns total assets tensor (with 0 for missing values)."""
     total_assets = []
     for symbol in symbols:
         if symbol in dmgr.total_assets and dmgr.total_assets[symbol] is not None:
             total_assets.append(float(dmgr.total_assets[symbol]))
         else:
             total_assets.append(0.0)
-    total_assets = tf.constant(total_assets, dtype=tf.float32)
-    mask = tf.math.logical_and(mask, total_assets > 0.0)
-    return (total_assets, mask)
+    return tf.constant(total_assets, dtype=tf.float32)
 
 
 def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor], total_assets: tf.Tensor) -> None:
@@ -231,7 +236,10 @@ def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor],
     all_adjusted_gains: tf.Tensor = tf.constant(0.0)
 
     if total_assets is not None:
+        if tf.reduce_sum(total_assets) == 0:
+            raise ValueError('Invalid weighted average: sum of total_assets is 0!')
         logits = tf.math.log1p(total_assets)
+        mask = tf.math.logical_and(mask, total_assets > 0.0)
     else:
         logits = tf.zeros(dtype=tf.float32, shape=tf.shape(log_gains)[-1])
 
@@ -248,7 +256,6 @@ def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor],
         else:
             mask_year = mask[start_idx:end_idx, :]
             log_gains_year = log_gains[start_idx:end_idx, :]
-        # print(f'mask_year.shape={mask_year.shape}, log_gains_year.shape={log_gains_year.shape}\n{log_gains_year}')
 
         # Find mask for logits of symbos used.
         symbols_used = tf.reduce_any(mask_year, axis=0)
