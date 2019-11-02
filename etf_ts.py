@@ -301,13 +301,18 @@ def average(symbols: List[Text],
           f'{all_gains:.2f},{all_adjusted_gains:.2f},,,,Gains (p.a.), readjusted every year.')
     if total_assets is not None:
         assets_mix = tf_lib.masked_softmax(logits, total_assets > 0.0).numpy()
+        items = []
         for idx, assets in enumerate(total_assets.numpy()):
             if assets > 0:
                 symbol = symbols[idx]
                 description = '?'
                 if symbol in config_ib.SYMBOL_TO_INFO:
                     description = config_ib.SYMBOL_TO_INFO[symbol]['description']
-                print(f'\t{symbol},{assets_mix[idx]*100.0:.1f}%,{description}')
+                items.append((assets_mix[idx]*100.0, symbol, description))
+
+        items = sorted(items, reverse=True)
+        for item in items:
+            print(f'\t{item[1]},{item[0]:.1f}%,{item[2]}')
 
 
 def mix_previous_period(symbols: List[Text], mask: np.ndarray, fields: Dict[Text, tf.Tensor], all_serials: List[int]) -> None:
