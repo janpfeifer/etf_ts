@@ -40,6 +40,8 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     'data', None,
     'Base path where to store historical marked data. Can be shared across models')
+flags.mark_flag_as_required('data')
+
 flags.DEFINE_integer('max_age_days', 10,
                      'Maximum number of days before updating cached data.')
 flags.DEFINE_list(
@@ -61,12 +63,13 @@ flags.DEFINE_float(
     'Log gains when positive are powered by this value. Values < 1.0 will tend to make choices more smooth.')
 
 flags.DEFINE_list(
-    'stats', 'per_asset,greedy,average,mix,selection',
+    'stats', 'per_asset,greedy,average,commons,mix,selection',
     'List of stats to output. A selection of: per_asset, etc.'
 )
 flags.DEFINE_integer('mix_steps', 300,
                      'Number of steps to optimize each period in mixed strategy.')
-flags.mark_flag_as_required('data')
+flags.DEFINE_integer('commons_top_k', None, 'Only use the TopK assets of when using weighted averaged (commons)')
+
 
 
 flags.DEFINE_float(
@@ -130,6 +133,7 @@ def main(argv):
     # Calculate dense ordered arrays.
     fields, mask, all_serials = dense_measures.DenseMeasureMatrices(
         dmgr.data, symbols)
+    mask = tf.constant(mask, dtype=tf.bool)
 
     # Extra metrics calculated in Tensorflow
     fields['AdjustedLogDailyGain'] = optimizations.adjusted_log_gains(
@@ -142,9 +146,9 @@ def main(argv):
     # Header of all outputs.
     print('Symbol,Gain,Adjusted Gain,Initial,Final,Total Assets,Description')
     if 'average' in FLAGS.stats:
-        average(symbols, mask, fields)
+        average(symbols, mask, fields, all_serials)
     if 'commons' in FLAGS.stats:
-        average(symbols, mask, fields, total_assets = total_assets)
+        average(symbols, mask, fields, all_serials, total_assets = total_assets)
     # if 'greedy' in FLAGS.stats:
     #     greedy(symbols, mask, fields)
     if 'mix' in FLAGS.stats:
@@ -226,7 +230,10 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
         print(f'{symbol},{gain:.4f},{adjusted_gain:.4f},{initial_value:.2f},{final_value:.2f},{total_assets[symbol_idx]:.2g},{description}')
 
 
-def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor], 
+def average(symbols: List[Text], 
+            mask: np.ndarray, 
+            fields: Dict[Text, tf.Tensor], 
+            all_serials: List[int], 
             total_assets: Optional[tf.Tensor] = None) -> None:
     log_gains = fields['LogDailyGain']
     log_gains = tf.where(mask, log_gains, tf.zeros_like(
@@ -238,8 +245,19 @@ def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor],
     if total_assets is not None:
         if tf.reduce_sum(total_assets) == 0:
             raise ValueError('Invalid weighted average: sum of total_assets is 0!')
+        if FLAGS.commons_top_k is not None and len(total_assets) > FLAGS.commons_top_k:
+            k = FLAGS.commons_top_k
+            top_k, top_k_indices = tf.math.top_k(total_assets, k)
+            if tf.reduce_min(top_k).numpy() > 0:   # If there are 0s in top-k, there is no selection to make.
+                sum_all_assets =tf.reduce_sum(total_assets).numpy()
+                selection_pct = (tf.reduce_sum(top_k).numpy() / sum_all_assets) * 100.0
+                logging.info(f'- commons_top_k (k={k}, selected {selection_pct:.2f}% of {sum_all_assets:.2g})')
+                total_assets=tf.scatter_nd(
+                    tf.expand_dims(top_k_indices, -1), 
+                    top_k, shape=total_assets.shape)
         logits = tf.math.log1p(total_assets)
         mask = tf.math.logical_and(mask, total_assets > 0.0)
+
     else:
         logits = tf.zeros(dtype=tf.float32, shape=tf.shape(log_gains)[-1])
 
@@ -251,18 +269,23 @@ def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor],
             is_last = True
         end_idx = -ii * config.YEARLY_PERIOD_IN_SERIAL
         if ii == 0:
-            mask_year = mask[start_idx:, :]
-            log_gains_year = log_gains[start_idx:, :]
+            period_mask  = mask[start_idx:, :]
+            period_log_gains = log_gains[start_idx:, :]
+            period_serials = all_serials[start_idx:]
         else:
-            mask_year = mask[start_idx:end_idx, :]
-            log_gains_year = log_gains[start_idx:end_idx, :]
+            period_mask = mask[start_idx:end_idx, :]
+            period_log_gains = log_gains[start_idx:end_idx, :]
+            period_serials = all_serials[start_idx:end_idx]
 
         # Find mask for logits of symbos used.
-        symbols_used = tf.reduce_any(mask_year, axis=0)
+        symbols_used = tf.constant(
+            dense_measures.SelectSymbolsFromMask(period_serials, period_mask),
+            dtype=tf.bool)
+        logging.debug(f'- period {ii}: {np.count_nonzero(symbols_used)} symbols used.')
 
         # Find gains for the year.
         mix_gain, adjusted_mix_gain = optimizations.mix_gain(
-            logits, symbols_used, log_gains_year, FLAGS.loss_cost,
+            logits, symbols_used, period_log_gains, FLAGS.loss_cost,
             FLAGS.gain_power)
         all_gains += tf.math.log(mix_gain)
         all_adjusted_gains += tf.math.log(adjusted_mix_gain)
@@ -276,9 +299,18 @@ def average(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor],
     all_gains, all_adjusted_gains = _report_pct_all_gains(name, all_gains, all_adjusted_gains, cycles)
     print(f'_{name} (last {years:.1f} years),' +
           f'{all_gains:.2f},{all_adjusted_gains:.2f},,,,Gains (p.a.), readjusted every year.')
+    if total_assets is not None:
+        assets_mix = tf_lib.masked_softmax(logits, total_assets > 0.0).numpy()
+        for idx, assets in enumerate(total_assets.numpy()):
+            if assets > 0:
+                symbol = symbols[idx]
+                description = '?'
+                if symbol in config_ib.SYMBOL_TO_INFO:
+                    description = config_ib.SYMBOL_TO_INFO[symbol]['description']
+                print(f'\t{symbol},{assets_mix[idx]*100.0:.1f}%,{description}')
 
 
-def mix_previous_period(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.Tensor], all_serials: List[int]) -> None:
+def mix_previous_period(symbols: List[Text], mask: np.ndarray, fields: Dict[Text, tf.Tensor], all_serials: List[int]) -> None:
     log_gains = tf.convert_to_tensor(fields['LogDailyGain'], dtype=tf.float32)
     hparams = {
         'steps': FLAGS.mix_steps,

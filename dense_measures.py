@@ -131,7 +131,7 @@ def SelectSymbolsFromMask(serials: List, mask: np.ndarray) -> np.ndarray:
         for the given serial.
 
     Returns:
-      1D-array (bool) with the symbols valid for use -- that is, without any large
+      1D-array (bool), shape [symbols] with the symbols valid for use -- that is, without any large
          missing chunks of data -- controlled by MAX_ACCEPTABLE_SKIP.
     """
     if len(serials) == 0:
