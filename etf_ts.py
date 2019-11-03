@@ -68,8 +68,8 @@ flags.DEFINE_list(
 )
 flags.DEFINE_integer('mix_steps', 300,
                      'Number of steps to optimize each period in mixed strategy.')
-flags.DEFINE_integer('commons_top_k', None, 'Only use the TopK assets of when using weighted averaged (commons)')
-
+flags.DEFINE_integer('commons_top_k', None,
+                     'Only use the TopK assets of when using weighted averaged (commons)')
 
 
 flags.DEFINE_float(
@@ -93,6 +93,7 @@ flags.DEFINE_integer(
     'If set, it will try to download asset information in batches. This is useful to detect bugs '
     'in downloading.')
 
+
 def main(argv):
     del argv  # Unused.
 
@@ -112,8 +113,8 @@ def main(argv):
     else:
         n = FLAGS.batch_size
         batches = [
-            symbols[ii * n:(ii + 1) * n] 
-            for ii in range((len(symbols) + n - 1) // n )]
+            symbols[ii * n:(ii + 1) * n]
+            for ii in range((len(symbols) + n - 1) // n)]
         symbols = []
         for ii, batch in enumerate(batches):
             print(f'\n(Down)Loading data for {batch} (batch {ii} out of {len(batches)})')
@@ -133,7 +134,6 @@ def main(argv):
     # Calculate dense ordered arrays.
     fields, mask, all_serials = dense_measures.DenseMeasureMatrices(
         dmgr.data, symbols)
-    mask = tf.constant(mask, dtype=tf.bool)
 
     # Extra metrics calculated in Tensorflow
     fields['AdjustedLogDailyGain'] = optimizations.adjusted_log_gains(
@@ -148,7 +148,7 @@ def main(argv):
     if 'average' in FLAGS.stats:
         average(symbols, mask, fields, all_serials)
     if 'commons' in FLAGS.stats:
-        average(symbols, mask, fields, all_serials, total_assets = total_assets)
+        average(symbols, mask, fields, all_serials, total_assets=total_assets)
     # if 'greedy' in FLAGS.stats:
     #     greedy(symbols, mask, fields)
     if 'mix' in FLAGS.stats:
@@ -170,7 +170,7 @@ def _get_symbols(selection: Optional[List[Text]]) -> List[Text]:
         elif selection[0] == 'vanguard':
             filtered = []
             for symbol in symbols:
-                if config_ib.SYMBOL_TO_INFO[symbol]['description'].lower().find('vanguard') >= 0:
+                if (config_ib.SYMBOL_TO_INFO[symbol]['description'].lower().find('vanguard') >= 0 and symbol not in data_manager.SKIP_SYMBOLS):
                     filtered.append(symbol)
             symbols = filtered
         else:
@@ -179,7 +179,7 @@ def _get_symbols(selection: Optional[List[Text]]) -> List[Text]:
     return symbols
 
 
-def _get_total_assets(dmgr: data_manager.DataManager, symbols: List[Text], 
+def _get_total_assets(dmgr: data_manager.DataManager, symbols: List[Text],
                       mask: tf.Tensor) -> tf.Tensor:
     """Returns total assets tensor (with 0 for missing values)."""
     total_assets = []
@@ -230,10 +230,10 @@ def per_asset_gains(symbols: List[Text], mask: tf.Tensor, fields: Dict[Text, tf.
         print(f'{symbol},{gain:.4f},{adjusted_gain:.4f},{initial_value:.2f},{final_value:.2f},{total_assets[symbol_idx]:.2g},{description}')
 
 
-def average(symbols: List[Text], 
-            mask: np.ndarray, 
-            fields: Dict[Text, tf.Tensor], 
-            all_serials: List[int], 
+def average(symbols: List[Text],
+            mask: np.ndarray,
+            fields: Dict[Text, tf.Tensor],
+            all_serials: List[int],
             total_assets: Optional[tf.Tensor] = None) -> None:
     log_gains = fields['LogDailyGain']
     log_gains = tf.where(mask, log_gains, tf.zeros_like(
@@ -244,24 +244,28 @@ def average(symbols: List[Text],
 
     if total_assets is not None:
         if tf.reduce_sum(total_assets) == 0:
-            raise ValueError('Invalid weighted average: sum of total_assets is 0!')
+            raise ValueError(
+                'Invalid weighted average: sum of total_assets is 0!')
         if FLAGS.commons_top_k is not None and len(total_assets) > FLAGS.commons_top_k:
             k = FLAGS.commons_top_k
             top_k, top_k_indices = tf.math.top_k(total_assets, k)
-            if tf.reduce_min(top_k).numpy() > 0:   # If there are 0s in top-k, there is no selection to make.
-                sum_all_assets =tf.reduce_sum(total_assets).numpy()
-                selection_pct = (tf.reduce_sum(top_k).numpy() / sum_all_assets) * 100.0
+            # If there are 0s in top-k, there is no selection to make.
+            if tf.reduce_min(top_k).numpy() > 0:
+                sum_all_assets = tf.reduce_sum(total_assets).numpy()
+                selection_pct = (tf.reduce_sum(
+                    top_k).numpy() / sum_all_assets) * 100.0
                 logging.info(f'- commons_top_k (k={k}, selected {selection_pct:.2f}% of {sum_all_assets:.2g})')
-                total_assets=tf.scatter_nd(
-                    tf.expand_dims(top_k_indices, -1), 
+                total_assets = tf.scatter_nd(
+                    tf.expand_dims(top_k_indices, -1),
                     top_k, shape=total_assets.shape)
         logits = tf.math.log1p(total_assets)
-        mask = tf.math.logical_and(mask, total_assets > 0.0)
+        mask = tf.math.logical_and(mask, total_assets > 0.0).numpy()
 
     else:
         logits = tf.zeros(dtype=tf.float32, shape=tf.shape(log_gains)[-1])
 
     is_last = False
+    skipped_cycles = 0
     for ii in range(config.REPORT_PERIOD_YEARS):
         start_idx = -(ii + 1) * config.YEARLY_PERIOD_IN_SERIAL
         if -start_idx >= log_gains.shape[0]:
@@ -269,7 +273,7 @@ def average(symbols: List[Text],
             is_last = True
         end_idx = -ii * config.YEARLY_PERIOD_IN_SERIAL
         if ii == 0:
-            period_mask  = mask[start_idx:, :]
+            period_mask = mask[start_idx:, :]
             period_log_gains = log_gains[start_idx:, :]
             period_serials = all_serials[start_idx:]
         else:
@@ -277,26 +281,43 @@ def average(symbols: List[Text],
             period_log_gains = log_gains[start_idx:end_idx, :]
             period_serials = all_serials[start_idx:end_idx]
 
+        if len(period_serials) == 0:
+            continue
+        start_serial = period_serials[0]
+        last_serial = period_serials[-1]
+        period_description = (f'period {asset_measures.SerialDateToString(start_serial)}' +
+                              f' to {asset_measures.SerialDateToString(last_serial)}')
+
         # Find mask for logits of symbos used.
         symbols_used = tf.constant(
             dense_measures.SelectSymbolsFromMask(period_serials, period_mask),
             dtype=tf.bool)
-        logging.debug(f'- period {ii}: {np.count_nonzero(symbols_used)} symbols used.')
+        count_symbols = np.count_nonzero(symbols_used)
+        if count_symbols == 0:
+            # Skip periods without any symbol.
+            logging.info(f'- skipping {period_description}, since there are no assets available. '
+                         'This will be discounted from when annualizing the gains.')
+            skipped_cycles += len(period_serials)
+            continue
 
         # Find gains for the year.
         mix_gain, adjusted_mix_gain = optimizations.mix_gain(
             logits, symbols_used, period_log_gains, FLAGS.loss_cost,
             FLAGS.gain_power)
+        if mix_gain == 0:
+            logging.error(f'For {period_description} symbols={symbols_used} -> mix_gain=0, lost everything ?')
         all_gains += tf.math.log(mix_gain)
+        logging.debug(f'{period_description}: mix_gain={mix_gain}, all_gains={all_gains}')
         all_adjusted_gains += tf.math.log(adjusted_mix_gain)
 
         if is_last:
             break
 
-    cycles = -start_idx
+    cycles = -start_idx - skipped_cycles
     years = float(cycles) / config.YEARLY_PERIOD_IN_SERIAL
     name = 'average' if total_assets is None else 'commons'
-    all_gains, all_adjusted_gains = _report_pct_all_gains(name, all_gains, all_adjusted_gains, cycles)
+    all_gains, all_adjusted_gains = _report_pct_all_gains(
+        name, all_gains, all_adjusted_gains, cycles)
     print(f'_{name} (last {years:.1f} years),' +
           f'{all_gains:.2f},{all_adjusted_gains:.2f},,,,Gains (p.a.), readjusted every year.')
     if total_assets is not None:
@@ -308,7 +329,7 @@ def average(symbols: List[Text],
                 description = '?'
                 if symbol in config_ib.SYMBOL_TO_INFO:
                     description = config_ib.SYMBOL_TO_INFO[symbol]['description']
-                items.append((assets_mix[idx]*100.0, symbol, description))
+                items.append((assets_mix[idx] * 100.0, symbol, description))
 
         items = sorted(items, reverse=True)
         for item in items:
@@ -393,7 +414,8 @@ def mix_previous_period(symbols: List[Text], mask: np.ndarray, fields: Dict[Text
         adjusted_mix_gain = 100.0 * (adjusted_mix_gain - 1.0)
         logging.info(f'  gain={mix_gain:.2f}%, adjusted_gain={adjusted_mix_gain:.2f}% (both annualized)')
 
-    all_gains, all_adjusted_gains = _report_pct_all_gains('mix', all_gains, all_adjusted_gains, -apply_start)
+    all_gains, all_adjusted_gains = _report_pct_all_gains(
+        'mix', all_gains, all_adjusted_gains, -apply_start)
     print(f'_mix (last {config.REPORT_PERIOD_YEARS} years),' +
           f'{all_gains:.2f},{all_adjusted_gains:.2f},,,' +
           f'Trained with preceding {FLAGS.mix_training_period} year(s) ' +
@@ -408,7 +430,8 @@ def _report_pct_all_gains(name: Text, all_gains: tf.Tensor, all_adjusted_gains: 
 
     all_adjusted_gains = tf.math.exp(all_adjusted_gains)
     logging.info(f'\t{name}: all_adjusted_gains={all_adjusted_gains:.4f}, cycles={cycles}')
-    all_adjusted_gains = optimizations.annualized_gain(all_adjusted_gains, cycles)
+    all_adjusted_gains = optimizations.annualized_gain(
+        all_adjusted_gains, cycles)
     all_adjusted_gains = 100.0 * (all_adjusted_gains - 1.0)
     return all_gains, all_adjusted_gains
 

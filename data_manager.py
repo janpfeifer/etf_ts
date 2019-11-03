@@ -43,7 +43,14 @@ SKIP_SYMBOLS = set([
     'JMFP.SW', 'KLWD.L', 'KRWL.L', 'LMMV.L', 'LWMV.L', 'OGSC.L', 'S2HGBD.SW', 'SMRG.L',
     'TELG.L', 'TR3G.L', 'TR7S.SW', 'TRXG.L', 'UBIF.L', 'UC48.L', 'VDCA.L', 'VMIG.L',
     'VNRA.L', 'VUAA.L', 'VUAG.L', 'VUKG.L', 'WCLD.L', 'WCOM.SW', 'XAGG.L',
-    'GLDU.SW'
+    'GLDU.SW',
+
+
+    # Removed because of equivalence:
+    'VWRD.L',  # Same as VWRL.SW, "Vanguard FTSE All-World UCITS ETF (CHF)"
+    'VDEM.L',  # Same as VFEM.SW, "Vanguard FTSE Emerging Markets UCITS ETF (CHF)"
+    'VHYD.L',  # Same as VHYL.SW, "Vanguard FTSE All-World High Dividend Yield UCITS ETF (CHF)"
+    'VEMT.L',  # Same as VDET.SW, "Vanguard USD Emerging Markets Government Bond UCITS ETF (CHF)"
 ])
 
 YAHOO_SKIP_SYMBOLS = set([
@@ -126,6 +133,8 @@ YAHOO_SKIP_SYMBOLS = set([
     'TSWE.SW', 'TGBT.SW', 'TEET.SW', 'TRET.SW', 'TCBT.SW', 'TNAE.SW', 'TDIV.SW', 'VAAA.SW', 'TGET.SW',
     'MKUW.L', 'GLRA.L', 'EGOV.L', 'XZEM.L', 'CHGB.L',
 
+    'BCENUU.SW', 'CBND.L', 'EACW.SW', 'EEDM.L',
+
     # Broken
     'SMICHA.SW',
 ])
@@ -157,7 +166,7 @@ class DataManager:
           symbol = row['Symbol']
           self._wtd_available_symbols.add(symbol)
           currency = row['Currency'] if 'Currency' in row else 'USD'
-          if symbol not in config_ib.SYMBOL_TO_INFO: 
+          if symbol not in config_ib.SYMBOL_TO_INFO:
             config_ib.SYMBOL_TO_INFO[row['Symbol']] = {
                 'description': row["Name"],
                 'currency': currency,
@@ -182,7 +191,6 @@ class DataManager:
   def total_assets(self) -> Dict[str, Optional[float]]:
     """Returns lastest update on total assets for ETFs (or None for non-ETFs, or ETFs with missing infromation)."""
     return self._total_assets
-
 
   def PathForRawData(self, symbol: str) -> str:
     """Creates returns directory for symbol."""
@@ -261,7 +269,7 @@ class DataManager:
     summaries = assets.get_summary_data()
     for symbol in symbols:
       today = datetime.datetime.now().strftime("%Y-%m-%d")
-      if symbol in summaries and 'totalAssets' in summaries[symbol] and summaries[symbol]['totalAssets'] is not None: 
+      if symbol in summaries and 'totalAssets' in summaries[symbol] and summaries[symbol]['totalAssets'] is not None:
         lines = ['Date,Amount']  # Header
         total_assets = summaries[symbol]['totalAssets']
         csv_data.append(f'Date,TotalAssets\n{today},{total_assets}\n')
@@ -324,7 +332,6 @@ class DataManager:
 
     if len(df.index) < config.YEARLY_PERIOD_IN_SERIAL:
       return False
-
 
     # Load dividends.
     self._data[symbol] = df
@@ -432,7 +439,8 @@ class DataManager:
         symbol for symbol in need_downloading if symbol not in failed_symbols]
     if need_downloading:
       log_symbols('Downloading dividends from Yahoo', need_downloading)
-      all_dividends = self._DownloadDividendsCSVFromYahooFinance(need_downloading)
+      all_dividends = self._DownloadDividendsCSVFromYahooFinance(
+          need_downloading)
       for (ii, symbol) in enumerate(need_downloading):
         csv = all_dividends[ii]
         if csv is not None:
@@ -462,7 +470,7 @@ class DataManager:
 
     # Raise error if there were any failed symbols.
     if failed_symbols:
-      raise ValueError('Failed to download information for symbols: {}'.format(
+      logging.error('Failed to download information for symbols: {}'.format(
           ', '.join(failed_symbols)))
 
     # Load all the data into dataframes.

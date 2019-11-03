@@ -141,7 +141,8 @@ def SelectSymbolsFromMask(serials: List, mask: np.ndarray) -> np.ndarray:
     syms_valid = []
     serials = np.array(serials)
     for col in range(mask.shape[1]):
-        sym_serials = serials[mask[:, col]]
+        symbol_mask = mask[:, col]
+        sym_serials = serials[symbol_mask]
         if sym_serials.size == 0:
             syms_valid.append(False)
             continue
